@@ -1,13 +1,16 @@
 # TripLine
 
-TripLine is a React + Vite demo that now includes a lightweight local backend for itinerary generation.
+TripLine is a React + Vite travel-planning demo with a lightweight local backend.
 
-## What changed
+## What it does now
 
-- Chat input now calls a backend pipeline to generate a full itinerary
-- The left-side cards update with real stop data: name, category, description, rating, pricing, and action links
-- The right-side Leaflet map now draws the route trail and highlights each stop
-- Clicking a map stop opens a compact booking/details popup
+- supports a dashboard entry flow with redirect cards and destination quick starts
+- generates itinerary pipelines for global destinations, not just Tokyo
+- keeps the main split-screen planner UI intact
+- updates the left-side cards with stop details, category, rating, price, and action links
+- draws the route trail on the map and highlights every stop
+- opens compact details and booking-oriented popups on map click
+- supports iterative follow-up prompts like cheaper, more romantic, more local, family-friendly, nightlife-heavy, and laptop-friendly
 
 ## Run locally
 
@@ -19,7 +22,7 @@ npm run dev
 That starts:
 
 - Vite frontend
-- Local itinerary API on `http://localhost:8787`
+- local itinerary API on `http://localhost:8787`
 
 ## Useful scripts
 
@@ -38,7 +41,7 @@ POST /api/generate-itinerary
 Content-Type: application/json
 
 {
-  "prompt": "Plan a relaxed 5 day Tokyo trip for 2 adults with coffee, anime, sushi, and culture"
+  "prompt": "Plan a romantic 4 day trip to Paris for 2 adults with cafes, museums, evening views, and one luxury dinner"
 }
 ```
 

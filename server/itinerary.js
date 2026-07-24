@@ -42,7 +42,7 @@ const INTEREST_KEYWORDS = {
   nature: ["park", "garden", "nature", "walk", "hike", "beach"],
   art: ["art", "gallery", "immersive", "design", "creative"],
   family: ["family", "kids", "child", "children"],
-  luxury: ["luxury", "upscale", "premium", "five star"],
+  luxury: ["luxury", "upscale", "premium", "five star", "fancy"],
   romance: ["romantic", "couple", "honeymoon"],
   remote: ["cowork", "remote work", "wifi", "laptop", "digital nomad"],
   wellness: ["spa", "wellness", "slow", "relaxing"],
@@ -193,46 +193,46 @@ const TOKYO_PROFILE = {
     {
       dayName: "Arrival & Shinjuku",
       slots: [
-        { time: "2:40 PM", category: "Hotel", district: "Shinjuku", tags: ["hotel"] },
-        { time: "5:20 PM", category: "Viewpoint", district: "Shinjuku", tags: ["scenic", "walk"] },
-        { time: "7:00 PM", category: "Dinner", district: "Shinjuku", tags: ["food"] },
-        { time: "9:00 PM", category: "Nightlife", district: "Shinjuku", tags: ["nightlife", "bar"] },
+        { category: "Hotel", district: "Shinjuku", tags: ["hotel"] },
+        { category: "Viewpoint", district: "Shinjuku", tags: ["scenic", "walk"] },
+        { category: "Dinner", district: "Shinjuku", tags: ["food"] },
+        { category: "Nightlife", district: "Shinjuku", tags: ["nightlife", "bar"] },
       ],
     },
     {
       dayName: "Anime & East Side",
       slots: [
-        { time: "9:15 AM", category: "Coffee", district: "Kanda", tags: ["coffee"] },
-        { time: "11:00 AM", category: "Explore", district: "Akihabara", tags: ["anime", "shopping"] },
-        { time: "1:00 PM", category: "Lunch", district: "Akihabara", tags: ["food"] },
-        { time: "3:30 PM", category: "Explore", district: "Ueno", tags: ["culture", "nature", "walk"] },
+        { category: "Coffee", district: "Kanda", tags: ["coffee"] },
+        { category: "Explore", district: "Akihabara", tags: ["anime", "shopping"] },
+        { category: "Lunch", district: "Akihabara", tags: ["food"] },
+        { category: "Explore", district: "Ueno", tags: ["culture", "nature", "walk"] },
       ],
     },
     {
       dayName: "Asakusa & Immersive Art",
       slots: [
-        { time: "9:30 AM", category: "Sightseeing", district: "Asakusa", tags: ["culture", "history"] },
-        { time: "11:30 AM", category: "Explore", district: "Asakusa", tags: ["shopping", "walk"] },
-        { time: "2:00 PM", category: "Experience", district: "Toyosu", tags: ["art", "immersive"] },
-        { time: "6:30 PM", category: "Dinner", district: "Toyosu", tags: ["food", "sushi"] },
+        { category: "Sightseeing", district: "Asakusa", tags: ["culture", "history"] },
+        { category: "Explore", district: "Asakusa", tags: ["shopping", "walk"] },
+        { category: "Experience", district: "Toyosu", tags: ["art", "immersive"] },
+        { category: "Dinner", district: "Toyosu", tags: ["food", "sushi"] },
       ],
     },
     {
       dayName: "Shibuya, Harajuku & Design",
       slots: [
-        { time: "9:00 AM", category: "Coffee", district: "Harajuku", tags: ["coffee"] },
-        { time: "10:45 AM", category: "Sightseeing", district: "Harajuku", tags: ["culture", "nature"] },
-        { time: "1:00 PM", category: "Lunch", district: "Shibuya", tags: ["food"] },
-        { time: "4:15 PM", category: "Viewpoint", district: "Shibuya", tags: ["scenic", "shopping"] },
+        { category: "Coffee", district: "Harajuku", tags: ["coffee"] },
+        { category: "Sightseeing", district: "Harajuku", tags: ["culture", "nature"] },
+        { category: "Lunch", district: "Shibuya", tags: ["food"] },
+        { category: "Viewpoint", district: "Shibuya", tags: ["scenic", "shopping"] },
       ],
     },
     {
       dayName: "Ginza, Museums & Skyline",
       slots: [
-        { time: "8:45 AM", category: "Explore", district: "Ginza", tags: ["food", "market"] },
-        { time: "11:30 AM", category: "Museum", district: "Aoyama", tags: ["art", "culture"] },
-        { time: "2:30 PM", category: "Explore", district: "Daikanyama", tags: ["shopping", "coffee", "design"] },
-        { time: "6:00 PM", category: "Viewpoint", district: "Roppongi", tags: ["scenic", "nightlife"] },
+        { category: "Explore", district: "Ginza", tags: ["food", "market"] },
+        { category: "Museum", district: "Aoyama", tags: ["art", "culture"] },
+        { category: "Explore", district: "Daikanyama", tags: ["shopping", "coffee", "design"] },
+        { category: "Viewpoint", district: "Roppongi", tags: ["scenic", "nightlife"] },
       ],
     },
   ],
@@ -306,9 +306,19 @@ function parseDays(prompt) {
   return clamp(match ? Number(match[1]) : 5, 2, 10, 5);
 }
 
-function parseTravelers(prompt) {
-  const match = prompt.match(/(\d+)\s*(?:traveler|travelers|adult|adults|people|friends|guests|kids|children)/i);
-  return clamp(match ? Number(match[1]) : 2, 1, 12, 2);
+function parseAdults(prompt) {
+  const adultsMatch = prompt.match(/(\d+)\s*adults?/i);
+  if (adultsMatch) return clamp(Number(adultsMatch[1]), 1, 12, 2);
+
+  const generic = prompt.match(/(\d+)\s*(?:traveler|travelers|people|friends|guests)/i);
+  return clamp(generic ? Number(generic[1]) : 2, 1, 12, 2);
+}
+
+function parseKids(prompt) {
+  const kidsMatch = prompt.match(/(\d+)\s*(?:kid|kids|child|children)/i);
+  if (kidsMatch) return clamp(Number(kidsMatch[1]), 0, 8, 0);
+  if (/with kids|with a kid|with children|kid-friendly|family-friendly|family trip/i.test(prompt)) return 2;
+  return 0;
 }
 
 function parseBudget(prompt) {
@@ -316,14 +326,20 @@ function parseBudget(prompt) {
   if (match) return Number(match[1].replaceAll(",", ""));
   const plain = prompt.match(/budget\s*(?:of|under|around|is)?\s*([\d,]+)/i);
   if (plain) return Number(plain[1].replaceAll(",", ""));
-  if (/luxury/i.test(prompt)) return 4200;
-  if (/budget|cheap|affordable/i.test(prompt)) return 1200;
+  if (/luxury|fancy/i.test(prompt)) return 4200;
+  if (/budget|cheap|affordable|casual/i.test(prompt)) return 1200;
   return 2200;
 }
 
 function detectPace(normalizedPrompt) {
   if (/(relaxed|slow|chill|easygoing|laid back|wellness)/.test(normalizedPrompt)) return "Relaxed";
   if (/(fast|packed|ambitious|busy|maximize|sprint)/.test(normalizedPrompt)) return "Fast-paced";
+  return "Balanced";
+}
+
+function detectStyle(normalizedPrompt) {
+  if (/(luxury|fancy|upscale|premium|elevated|polished)/.test(normalizedPrompt)) return "Fancy";
+  if (/(casual|laid back|low key|low-key|budget|easygoing)/.test(normalizedPrompt)) return "Casual";
   return "Balanced";
 }
 
@@ -362,7 +378,7 @@ function extractDestination(prompt) {
   if (known) return CITY_CENTERS[known].displayName;
 
   const compact = prompt.trim();
-  if (compact && compact.split(/\s+/).length <= 4 && !/(budget|day|night|adult|adults|trip|itinerary|travel|food|culture|pace|luxury|family|romantic)/i.test(compact)) {
+  if (compact && compact.split(/\s+/).length <= 4 && !/(budget|day|night|adult|adults|trip|itinerary|travel|food|culture|pace|luxury|family|romantic|wake|sleep|kids)/i.test(compact)) {
     return titleCase(compact);
   }
 
@@ -380,6 +396,60 @@ function extractDestination(prompt) {
   }
 
   return "Lisbon";
+}
+
+function parseTimeString(value) {
+  if (!value) return null;
+  const match = String(value).trim().match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (!match) return null;
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2] ?? 0);
+  const meridiem = match[3]?.toLowerCase();
+
+  if (meridiem === "pm" && hours < 12) hours += 12;
+  if (meridiem === "am" && hours === 12) hours = 0;
+  if (!meridiem && hours <= 12) hours %= 24;
+
+  return clamp(hours * 60 + minutes, 0, 1439, 0);
+}
+
+function formatMinutes(totalMinutes) {
+  const normalized = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
+  const hours24 = Math.floor(normalized / 60);
+  const minutes = normalized % 60;
+  const meridiem = hours24 >= 12 ? "PM" : "AM";
+  const hours12 = hours24 % 12 || 12;
+  return `${hours12}:${String(minutes).padStart(2, "0")} ${meridiem}`;
+}
+
+function extractTimePreference(prompt, type) {
+  const patterns = type === "wake"
+    ? [
+        /wake(?:\s*up)?\s*(?:around|at)?\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i,
+        /start(?:ing)?\s*(?:around|at)?\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i,
+      ]
+    : [
+        /sleep\s*(?:around|at|by)?\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i,
+        /bed(?:time)?\s*(?:around|at|by)?\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i,
+      ];
+
+  for (const pattern of patterns) {
+    const match = prompt.match(pattern);
+    if (match?.[1]) {
+      return parseTimeString(match[1]);
+    }
+  }
+
+  return null;
+}
+
+function getWakeMinutes(prompt, kids) {
+  return extractTimePreference(prompt, "wake") ?? (kids > 0 ? 8 * 60 : 9 * 60);
+}
+
+function getSleepMinutes(prompt, kids) {
+  return extractTimePreference(prompt, "sleep") ?? (kids > 0 ? 21 * 60 + 30 : 23 * 60);
 }
 
 function getBudgetBand(amount) {
@@ -445,7 +515,11 @@ function scoreTokyoPlace(place, slot, request) {
     if ((place.tags ?? []).includes(interest)) score += 4;
   }
 
-  score -= Math.abs((place.budgetTier ?? 2) - request.budgetBand) * 4;
+  score -= Math.abs((place.budgetTier ?? 2) - request.styleBudgetBand) * 4;
+  if (request.style === "Fancy" && (place.tags ?? []).includes("luxury")) score += 8;
+  if (request.style === "Casual" && (place.tags ?? []).includes("budget")) score += 6;
+  if (request.kids > 0 && (place.tags ?? []).includes("family")) score += 8;
+
   return score + place.rating;
 }
 
@@ -468,7 +542,7 @@ function deriveDistrictPool(request) {
   if (request.interests.includes("art")) prefixes.push("Gallery Row");
   if (request.interests.includes("shopping")) prefixes.push("Design Mile");
   if (request.interests.includes("nature")) prefixes.push("Garden Belt");
-  if (request.interests.includes("nightlife")) prefixes.push("Night Quarter");
+  if (request.interests.includes("nightlife") && request.kids === 0 && !request.exclusions.noAlcohol) prefixes.push("Night Quarter");
   if (request.interests.includes("food")) prefixes.push("Market District");
   if (request.interests.includes("remote")) prefixes.push("Studio Lane");
 
@@ -481,16 +555,22 @@ function ratingFromSeed(seed) {
   return Number(Math.min(base, 4.9).toFixed(1));
 }
 
-function priceFor(kind, budgetBand) {
+function priceFor(kind, request) {
   const blueprint = KIND_BLUEPRINTS[kind] ?? KIND_BLUEPRINTS.explore;
-  return blueprint.priceBands[Math.max(0, Math.min(blueprint.priceBands.length - 1, budgetBand - 1))];
+  return blueprint.priceBands[Math.max(0, Math.min(blueprint.priceBands.length - 1, request.styleBudgetBand - 1))];
+}
+
+function stylePhrase(style) {
+  if (style === "Fancy") return "The stop leans polished and premium rather than merely convenient.";
+  if (style === "Casual") return "The stop leans easygoing, practical, and low-friction rather than dressy.";
+  return "The stop stays balanced between ease, quality, and polish.";
 }
 
 function buildGenericPlace(kind, district, request, origin, day, index) {
   const blueprint = KIND_BLUEPRINTS[kind] ?? KIND_BLUEPRINTS.explore;
   const seed = hashString(`${request.destination}-${district}-${kind}-${day}-${index}-${request.prompt}`);
   const label = pickFrom(blueprint.labels, seed);
-  const desc = `${pickFrom(blueprint.desc, seed)} In ${origin.displayName}${origin.country ? `, ${origin.country}` : ""}, this slot is tuned to the trip's ${request.pace.toLowerCase()} pace.`;
+  const desc = `${pickFrom(blueprint.desc, seed)} In ${origin.displayName}${origin.country ? `, ${origin.country}` : ""}, this slot is tuned to the trip's ${request.pace.toLowerCase()} pace. ${stylePhrase(request.style)}`;
   const position = offsetCoordinates(origin, seed, 0.012 + day * 0.003 + index * 0.0025);
 
   return enrichPlace(
@@ -499,10 +579,10 @@ function buildGenericPlace(kind, district, request, origin, day, index) {
       category: blueprint.category,
       desc,
       rating: ratingFromSeed(seed),
-      price: priceFor(kind, request.budgetBand),
-      budgetTier: request.budgetBand,
+      price: priceFor(kind, request),
+      budgetTier: request.styleBudgetBand,
       district,
-      tags: [...new Set([...(blueprint.tags ?? []), kind, ...request.interests.slice(0, 3)])],
+      tags: [...new Set([...(blueprint.tags ?? []), kind, ...request.interests.slice(0, 3), request.kids > 0 ? "family" : "adult"] )],
       lat: position.lat,
       lng: position.lng,
     },
@@ -510,44 +590,59 @@ function buildGenericPlace(kind, district, request, origin, day, index) {
   );
 }
 
+function personalizeTokyoPlans(request) {
+  if (request.kids === 0 && !request.exclusions.noAlcohol && request.sleepMinutes >= 22 * 60) {
+    return TOKYO_PROFILE.dayPlans;
+  }
+
+  return TOKYO_PROFILE.dayPlans.map((plan, planIndex) => ({
+    ...plan,
+    slots: plan.slots.map((slot, slotIndex) => {
+      if (planIndex === 0 && slotIndex === 3) {
+        return request.kids > 0 || request.exclusions.noAlcohol || request.sleepMinutes < 22 * 60
+          ? { category: "Explore", district: "Shinjuku", tags: ["family", "dessert", "walk"] }
+          : slot;
+      }
+      return slot;
+    }),
+  }));
+}
+
+function inferFallbackKind(slot) {
+  if (slot.category === "Coffee") return "coffee";
+  if (slot.category === "Dinner") return "dinner";
+  if (slot.category === "Lunch") return "lunch";
+  if (slot.category === "Hotel") return "stay";
+  if (slot.category === "Nightlife") return "nightlife";
+  if (slot.tags?.includes("art")) return "art";
+  if (slot.tags?.includes("culture")) return "culture";
+  if (slot.tags?.includes("scenic")) return "scenic";
+  if (slot.tags?.includes("nature") || slot.tags?.includes("family")) return "nature";
+  return "explore";
+}
+
 function buildTokyoItinerary(request) {
   const used = new Set();
   const days = [];
-  const plans = TOKYO_PROFILE.dayPlans.slice(0, request.days);
+  const plans = personalizeTokyoPlans(request).slice(0, request.days);
 
   for (const [dayIndex, plan] of plans.entries()) {
-    const items = plan.slots.map((slot) => {
+    const items = plan.slots.map((slot, itemIndex) => {
       const ranked = TOKYO_PROFILE.places
         .filter((place) => !used.has(place.name))
         .map((place) => ({ place, score: scoreTokyoPlace(place, slot, request) }))
         .sort((left, right) => right.score - left.score);
 
       const selected = ranked[0]?.score > -9999 ? ranked[0].place : null;
-      const fallbackKind = slot.category === "Coffee"
-        ? "coffee"
-        : slot.category === "Dinner"
-          ? "dinner"
-          : slot.category === "Lunch"
-            ? "lunch"
-            : slot.category === "Hotel"
-              ? "stay"
-              : slot.tags?.includes("nightlife")
-                ? "nightlife"
-                : slot.tags?.includes("art")
-                  ? "art"
-                  : slot.tags?.includes("culture")
-                    ? "culture"
-                    : slot.tags?.includes("scenic")
-                      ? "scenic"
-                      : "explore";
-      const place = selected ? enrichPlace(selected, request.destination) : buildGenericPlace(fallbackKind, slot.district, request, TOKYO_PROFILE.center, dayIndex + 1, 1);
+      const place = selected
+        ? enrichPlace(selected, request.destination)
+        : buildGenericPlace(inferFallbackKind(slot), slot.district, request, TOKYO_PROFILE.center, dayIndex + 1, itemIndex + 1);
       used.add(place.name);
 
       return {
         ...place,
         day: dayIndex + 1,
         dayName: plan.dayName,
-        time: slot.time,
       };
     });
 
@@ -557,12 +652,11 @@ function buildTokyoItinerary(request) {
   while (days.length < request.days) {
     const day = days.length + 1;
     const district = deriveDistrictPool(request)[day % deriveDistrictPool(request).length];
-    const template = ["coffee", "culture", "lunch", request.interests.includes("nightlife") ? "nightlife" : "dinner"];
+    const template = ["coffee", request.kids > 0 ? "nature" : "culture", "lunch", request.kids > 0 ? "scenic" : (request.interests.includes("nightlife") && request.kids === 0 ? "nightlife" : "dinner")];
     const items = template.map((kind, index) => ({
       ...buildGenericPlace(kind, district, request, TOKYO_PROFILE.center, day, index + 1),
       day,
       dayName: `Flexible Day ${day}`,
-      time: ["9:00 AM", "11:30 AM", "1:15 PM", "6:30 PM"][index],
     }));
 
     days.push({ day, dayName: `Flexible Day ${day}`, items });
@@ -572,33 +666,69 @@ function buildTokyoItinerary(request) {
 }
 
 function buildDayTemplate(request, day) {
-  const nightlifeKind = request.interests.includes("nightlife") && !request.exclusions.noAlcohol ? "nightlife" : "dinner";
-  const morningKind = request.interests.includes("remote") ? "remote" : request.interests.includes("coffee") ? "coffee" : "culture";
-  const middayKind = request.interests.includes("food") ? "lunch" : request.interests.includes("culture") ? "culture" : "explore";
-  const afternoonKind = request.interests.includes("art")
-    ? "art"
-    : request.interests.includes("nature")
-      ? "nature"
-      : request.interests.includes("shopping")
-        ? "explore"
-        : "scenic";
-  const eveningKind = request.interests.includes("romance") ? "scenic" : nightlifeKind;
+  const eveningKind = request.kids > 0 || request.exclusions.noAlcohol || request.sleepMinutes < 22 * 60
+    ? (request.interests.includes("scenic") ? "scenic" : "dinner")
+    : (request.interests.includes("nightlife") ? "nightlife" : "dinner");
+  const morningKind = request.interests.includes("remote") ? "remote" : (request.interests.includes("coffee") ? "coffee" : "culture");
+  const middayKind = request.interests.includes("food") ? "lunch" : (request.interests.includes("culture") ? "culture" : "explore");
+  const afternoonKind = request.kids > 0
+    ? (request.interests.includes("nature") ? "nature" : "explore")
+    : request.interests.includes("art")
+      ? "art"
+      : request.interests.includes("nature")
+        ? "nature"
+        : request.interests.includes("shopping")
+          ? "explore"
+          : "scenic";
 
   if (day === 1) {
-    return [
-      { time: "2:30 PM", kind: "stay" },
-      { time: "5:00 PM", kind: request.interests.includes("scenic") ? "scenic" : "explore" },
-      { time: "7:15 PM", kind: "dinner" },
-      { time: "9:00 PM", kind: eveningKind },
-    ];
+    return ["stay", request.interests.includes("scenic") ? "scenic" : "explore", "dinner", eveningKind];
   }
 
-  return [
-    { time: "9:00 AM", kind: morningKind },
-    { time: "11:15 AM", kind: request.interests.includes("culture") ? "culture" : "explore" },
-    { time: "1:15 PM", kind: middayKind },
-    { time: "4:00 PM", kind: afternoonKind },
-  ];
+  return [morningKind, request.interests.includes("culture") ? "culture" : "explore", middayKind, afternoonKind];
+}
+
+function getDayStartMinutes(request) {
+  return request.wakeMinutes + (request.kids > 0 ? 45 : request.pace === "Fast-paced" ? 35 : 60);
+}
+
+function getDayIntervals(request) {
+  if (request.pace === "Fast-paced") return [0, 120, 255, 420];
+  if (request.kids > 0) return [0, 150, 300, 495];
+  return [0, 140, 285, 465];
+}
+
+function applyScheduleToDays(days, request) {
+  return days.map((day, index) => {
+    const isArrivalDay = index === 0;
+    const count = day.items.length;
+
+    let times;
+    if (isArrivalDay && count === 4) {
+      const lastTime = Math.max(18 * 60 + 15, request.sleepMinutes - (request.kids > 0 ? 90 : 75));
+      times = [14 * 60 + 30, 17 * 60, 19 * 60 + 15, lastTime];
+    } else {
+      const start = getDayStartMinutes(request);
+      const intervals = getDayIntervals(request);
+      times = intervals.slice(0, count).map((offset) => start + offset);
+      if (count >= 4) {
+        times[count - 1] = Math.min(times[count - 1], request.sleepMinutes - (request.kids > 0 ? 150 : 180));
+      }
+    }
+
+    const normalizedTimes = times.map((time, itemIndex) => {
+      if (itemIndex === 0) return time;
+      return Math.max(time, times[itemIndex - 1] + 75);
+    });
+
+    return {
+      ...day,
+      items: day.items.map((item, itemIndex) => ({
+        ...item,
+        time: formatMinutes(normalizedTimes[itemIndex] ?? (9 * 60 + itemIndex * 120)),
+      })),
+    };
+  });
 }
 
 function buildGenericItinerary(request, origin) {
@@ -606,15 +736,14 @@ function buildGenericItinerary(request, origin) {
   const days = [];
 
   for (let day = 1; day <= request.days; day += 1) {
-    const slots = buildDayTemplate(request, day);
+    const template = buildDayTemplate(request, day);
     const district = districtPool[(day - 1) % districtPool.length];
     const dayName = pickFrom(DAY_THEMES, day - 1).replace("{district}", district);
 
-    const items = slots.map((slot, index) => ({
-      ...buildGenericPlace(slot.kind, district, request, origin, day, index + 1),
+    const items = template.map((kind, index) => ({
+      ...buildGenericPlace(kind, district, request, origin, day, index + 1),
       day,
       dayName,
-      time: slot.time,
     }));
 
     days.push({ day, dayName, items });
@@ -669,24 +798,33 @@ async function resolveOrigin(destination) {
 function buildFollowUpSuggestions(request, origin) {
   const suggestions = [
     `Make this cheaper in ${origin.displayName}`,
-    `Make this more local and less touristy`,
-    `Keep everything train-friendly and walkable`,
+    "Make this more local and less touristy",
+    "Keep everything train-friendly and walkable",
   ];
 
   if (!request.interests.includes("family")) suggestions.push("Make this family friendly");
-  if (!request.interests.includes("luxury")) suggestions.push("Turn this into a luxury version");
+  if (!request.interests.includes("luxury") && request.style !== "Fancy") suggestions.push("Turn this into a fancy version");
   if (!request.interests.includes("remote")) suggestions.push("Add cowork-friendly cafes and laptop stops");
   if (!request.interests.includes("romance")) suggestions.push("Make this more romantic");
   if (!request.exclusions.noSeafood) suggestions.push("Swap seafood out completely");
-  if (!request.interests.includes("nightlife") && !request.exclusions.noAlcohol) suggestions.push("Add more nightlife");
+  if (!request.interests.includes("nightlife") && request.kids === 0 && !request.exclusions.noAlcohol) suggestions.push("Add more nightlife");
   if (!request.interests.includes("nature")) suggestions.push("Add an outdoor or park-heavy afternoon");
+  if (request.wakeMinutes < 9 * 60) suggestions.push("Start the days later, nothing before 10 AM");
+  if (request.sleepMinutes > 22 * 60 + 30 && request.kids === 0) suggestions.push("Push one night later with rooftop drinks");
 
   return [...new Set(suggestions)].slice(0, 8);
 }
 
-function finalizeTrip(request, origin, days) {
+function buildTravelerLabel(request) {
+  if (request.kids > 0) {
+    return `${request.adults} adults · ${request.kids} ${request.kids === 1 ? "kid" : "kids"}`;
+  }
+  return `${request.adults} ${request.adults === 1 ? "adult" : "adults"}`;
+}
+
+function finalizeTrip(request, origin, rawDays) {
+  const days = applyScheduleToDays(rawDays, request);
   const flatPlaces = days.flatMap((day) => day.items);
-  const travelerLabel = `${request.travelers} ${request.travelers === 1 ? "adult" : "adults"}`;
   const focus = request.interests.slice(0, 4).join(", ");
   const exclusions = [];
   if (request.exclusions.noSeafood) exclusions.push("seafood removed");
@@ -703,9 +841,19 @@ function finalizeTrip(request, origin, days) {
     departure: origin.departure || "Flexible arrival",
     budgetLabel: `$${request.budget.toLocaleString()} total`,
     paceLabel: request.pace,
-    travelerLabel,
-    summary: `${flatPlaces.length} routed stops across ${days.length} days, with action links and map popups ready for demo use.`,
+    travelerLabel: buildTravelerLabel(request),
+    summary: `${flatPlaces.length} routed stops across ${days.length} days, with day-by-day trail lines, action links, and map popups ready for demo use.`,
     followUpSuggestions: buildFollowUpSuggestions(request, origin),
+    preferences: {
+      budget: request.budget,
+      adults: request.adults,
+      kids: request.kids,
+      withKids: request.kids > 0,
+      wakeTime: formatMinutes(request.wakeMinutes),
+      sleepTime: formatMinutes(request.sleepMinutes),
+      style: request.style,
+      pace: request.pace,
+    },
     route: flatPlaces.map((place) => ({ id: place.id, lat: place.lat, lng: place.lng, day: place.day })),
     days,
   };
@@ -716,18 +864,36 @@ export async function generateItinerary(rawPrompt = "") {
   const normalizedPrompt = prompt.toLowerCase();
   const initialDestination = extractDestination(prompt);
   const origin = await resolveOrigin(initialDestination);
+  const budget = parseBudget(prompt);
+  const adults = parseAdults(prompt);
+  const kids = parseKids(prompt);
+  const wakeMinutes = getWakeMinutes(prompt, kids);
+  const sleepMinutes = getSleepMinutes(prompt, kids);
+  const style = detectStyle(normalizedPrompt);
+  const baseBudgetBand = getBudgetBand(budget);
+  const styleBudgetBand = clamp(baseBudgetBand + (style === "Fancy" ? 1 : style === "Casual" ? -1 : 0), 1, 3, baseBudgetBand);
 
   const request = {
     prompt,
     destination: origin.displayName,
     days: parseDays(prompt),
-    travelers: parseTravelers(prompt),
-    budget: parseBudget(prompt),
-    budgetBand: getBudgetBand(parseBudget(prompt)),
+    adults,
+    kids,
+    travelers: adults + kids,
+    budget,
+    budgetBand: baseBudgetBand,
+    styleBudgetBand,
     pace: detectPace(normalizedPrompt),
+    style,
     interests: detectInterests(normalizedPrompt),
     exclusions: detectExclusions(normalizedPrompt),
+    wakeMinutes,
+    sleepMinutes,
   };
+
+  if (kids > 0 && !request.interests.includes("family")) {
+    request.interests = [...request.interests, "family"];
+  }
 
   if (findKnownCity(origin.displayName) === "tokyo") {
     return { trip: buildTokyoItinerary(request) };

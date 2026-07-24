@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const DEFAULT_PROMPT = "Plan a balanced 5 day trip to Lisbon for 2 adults with coffee, food, scenic views, and culture";
+const DAY_COLORS = ["#C1442A", "#2C4468", "#5C6E4E", "#8F5D2C", "#6D4D8C", "#26717A", "#7A3546", "#596B9C"];
 
 const FEATURED_REDIRECTS = [
   {
@@ -50,6 +51,18 @@ const FOCUS_TRACKS = [
   },
 ];
 
+const DEFAULT_PERSONALIZATION = {
+  days: 5,
+  budget: 2200,
+  adults: 2,
+  withKids: false,
+  kids: 1,
+  wakeTime: "09:00",
+  sleepTime: "23:00",
+  style: "Balanced",
+  pace: "Balanced",
+};
+
 const CSS = `
   .travelos-root{
     --paper:#F6F4EE; --paper-2:#EFEBE1; --ink:#1E1C19; --ink-soft:#6B655C;
@@ -61,11 +74,11 @@ const CSS = `
   .travelos-root *{ box-sizing:border-box; }
   .to-app{ display:flex; height:100vh; width:100%; }
   .to-left{ width:50%; height:100%; position:relative; display:flex; flex-direction:column; border-right:1px solid var(--line); }
-  .to-scroll{ overflow-y:auto; height:100%; padding:30px 40px 160px 40px; scrollbar-width:thin; scrollbar-color:var(--line) transparent; }
+  .to-scroll{ overflow-y:auto; height:100%; padding:30px 40px 180px 40px; scrollbar-width:thin; scrollbar-color:var(--line) transparent; }
   .to-scroll::-webkit-scrollbar{ width:8px; }
   .to-scroll::-webkit-scrollbar-thumb{ background:var(--line); border-radius:8px; }
   .to-nav-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; }
-  .to-nav-btn,.td-action,.td-chip,.td-card-link{ cursor:pointer; }
+  .to-nav-btn,.td-action,.td-chip,.td-card-link,.td-redirect-card,.td-focus-card,.to-map-day-btn,.to-day-head{ cursor:pointer; }
   .to-nav-btn{ border:1px solid rgba(44,68,104,.14); background:rgba(255,255,255,.7); color:var(--aizome-deep); border-radius:999px; padding:8px 12px; font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.04em; text-transform:uppercase; }
   .to-nav-btn:hover{ background:var(--aizome-deep); color:#fff; }
   .to-nav-mini{ font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.04em; color:var(--ink-soft); }
@@ -76,17 +89,27 @@ const CSS = `
   .to-status{ font-size:13px; color:var(--aizome-deep); margin-bottom:26px; }
   .to-status strong{ color:var(--torii); }
   .to-error{ margin-top:8px; color:var(--torii); }
-  .to-trip-meta{ display:flex; gap:22px; flex-wrap:wrap; padding:16px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin-bottom:34px; }
+  .to-trip-meta{ display:flex; gap:22px; flex-wrap:wrap; padding:16px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin-bottom:18px; }
   .to-meta-item .to-label{ font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:4px; }
   .to-meta-item .to-value{ font-size:15px; font-weight:500; }
+  .to-pref-panel{ border:1px solid var(--line); border-radius:18px; background:rgba(255,255,255,.68); padding:14px 16px; margin-bottom:26px; }
+  .to-pref-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:10px; }
+  .to-pref-title{ font-family:'Fraunces', serif; font-size:24px; color:var(--aizome-deep); margin:0; }
+  .to-pref-copy{ color:var(--ink-soft); font-size:13px; }
+  .to-pref-grid{ display:flex; flex-wrap:wrap; gap:8px; }
+  .to-pref-chip{ border-radius:999px; background:rgba(44,68,104,.08); border:1px solid rgba(44,68,104,.12); padding:7px 10px; font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.03em; color:var(--aizome-deep); }
   .to-day-block{ margin-bottom:44px; }
-  .to-day-head{ display:flex; align-items:baseline; gap:12px; margin-bottom:20px; }
+  .to-day-head{ display:flex; align-items:baseline; gap:12px; margin-bottom:20px; transition:opacity .15s ease; }
+  .to-day-head:hover{ opacity:.9; }
+  .to-day-head.active .to-num,
+  .to-day-head.active .to-name{ color:var(--torii); }
   .to-day-head .to-num{ font-family:'Fraunces', serif; font-size:26px; color:var(--torii); }
   .to-day-head .to-name{ font-family:'Fraunces', serif; font-size:22px; color:var(--aizome-deep); }
   .to-day-head .to-rule{ flex:1; height:1px; background:var(--line); }
-  .to-place-card{ display:flex; background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; margin-bottom:16px; cursor:pointer; transition:box-shadow .18s ease, transform .18s ease, border-color .18s ease; position:relative; }
+  .to-place-card{ display:flex; background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; margin-bottom:16px; cursor:pointer; transition:box-shadow .18s ease, transform .18s ease, border-color .18s ease, opacity .18s ease; position:relative; }
   .to-place-card:hover{ box-shadow:0 10px 26px -14px rgba(28,44,66,.35); transform:translateY(-2px); border-color:var(--aizome); }
-  .to-place-card.active{ border-color:var(--torii); box-shadow:0 0 0 2px rgba(193,68,42,.15); }
+  .to-place-card.muted{ opacity:.6; }
+  .to-place-card.active{ border-color:var(--torii); box-shadow:0 0 0 2px rgba(193,68,42,.15); opacity:1; }
   .to-place-time{ width:78px; flex-shrink:0; background:var(--paper-2); display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:'JetBrains Mono', monospace; font-size:13px; color:var(--aizome-deep); border-right:1px dashed var(--line); position:relative; text-align:center; padding:0 8px; }
   .to-place-time::before,.to-place-time::after{ content:""; position:absolute; width:12px; height:12px; background:var(--paper); border-radius:50%; right:-6px; }
   .to-place-time::before{ top:-6px; }
@@ -106,7 +129,12 @@ const CSS = `
   .to-place-link:hover{ background:var(--aizome-deep); color:#fff; border-color:var(--aizome-deep); }
   .to-right{ width:50%; height:100%; position:relative; }
   .to-map{ width:100%; height:100%; }
-  .to-map-badge{ position:absolute; top:20px; left:20px; z-index:500; background:rgba(246,244,238,.85); backdrop-filter:blur(10px); border:1px solid var(--line); border-radius:10px; padding:8px 14px; font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--aizome-deep); box-shadow:0 6px 18px -10px rgba(28,44,66,.3); }
+  .to-map-badge{ position:absolute; top:20px; left:20px; z-index:500; background:rgba(246,244,238,.9); backdrop-filter:blur(10px); border:1px solid var(--line); border-radius:10px; padding:8px 14px; font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--aizome-deep); box-shadow:0 6px 18px -10px rgba(28,44,66,.3); }
+  .to-map-legend{ position:absolute; top:64px; left:20px; right:20px; z-index:500; display:flex; flex-wrap:wrap; gap:8px; }
+  .to-map-day-btn{ border:none; border-radius:999px; padding:8px 11px; font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.04em; background:rgba(255,255,255,.88); color:var(--aizome-deep); border:1px solid rgba(44,68,104,.12); box-shadow:0 8px 18px -14px rgba(28,44,66,.35); }
+  .to-map-day-btn.active{ color:#fff; border-color:transparent; }
+  .to-map-day-btn.all.active{ background:var(--aizome-deep); }
+  .to-map-day-swatch{ display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px; vertical-align:middle; }
   .to-composer{ position:absolute; left:24px; right:24px; bottom:20px; z-index:900; background:rgba(255,255,255,.62); backdrop-filter:blur(22px) saturate(160%); -webkit-backdrop-filter:blur(22px) saturate(160%); border:1px solid rgba(255,255,255,.8); border-radius:18px; box-shadow:0 20px 45px -18px rgba(28,44,66,.35); padding:12px 14px; }
   .to-chips{ display:flex; gap:8px; margin-bottom:10px; overflow-x:auto; }
   .to-chip{ font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--aizome-deep); background:rgba(44,68,104,.08); border:1px solid rgba(44,68,104,.15); padding:6px 11px; border-radius:20px; white-space:nowrap; cursor:pointer; transition:background .15s ease, border-color .15s ease; }
@@ -169,19 +197,26 @@ const CSS = `
   .td-card-copy{ color:var(--ink-soft); line-height:1.52; flex:1; margin:0; }
   .td-card-link{ display:inline-flex; align-items:center; gap:8px; font-family:'JetBrains Mono', monospace; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--aizome-deep); }
   .td-card-link:hover{ color:var(--torii); }
+  .td-persona-grid{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }
+  .td-field{ display:flex; flex-direction:column; gap:7px; }
+  .td-field label{ font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-soft); }
+  .td-field input,.td-field select{ width:100%; border:1px solid rgba(44,68,104,.14); border-radius:14px; padding:11px 12px; background:#fff; color:var(--ink); font:inherit; }
+  .td-field-inline{ display:flex; align-items:center; gap:8px; padding:11px 12px; background:#fff; border:1px solid rgba(44,68,104,.14); border-radius:14px; min-height:47px; }
+  .td-field-inline input[type="checkbox"]{ width:16px; height:16px; margin:0; }
   .td-destination-row{ display:flex; flex-wrap:wrap; gap:10px; }
-  @media (max-width: 1140px){ .td-hero{ grid-template-columns:1fr; } .td-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width: 1140px){ .td-hero{ grid-template-columns:1fr; } .td-grid,.td-persona-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
   @media (max-width: 860px){
     .to-app{ flex-direction:column; height:auto; min-height:100vh; }
     .to-left,.to-right{ width:100%; height:auto; min-height:50vh; }
-    .to-right{ min-height:48vh; }
-    .to-scroll{ padding:24px 20px 180px 20px; }
+    .to-right{ min-height:52vh; }
+    .to-scroll{ padding:24px 20px 190px 20px; }
     .to-title{ font-size:36px; }
     .td-shell{ padding:24px 20px 32px 20px; }
     .td-hero-title{ font-size:40px; }
-    .td-grid{ grid-template-columns:1fr; }
-    .td-input-wrap{ flex-direction:column; }
-    .td-action{ width:100%; }
+    .td-grid,.td-persona-grid{ grid-template-columns:1fr; }
+    .td-input-wrap,.to-input-row{ flex-direction:column; }
+    .td-action,.to-send-btn{ width:100%; }
+    .to-map-legend{ top:74px; }
   }
 `;
 
@@ -198,7 +233,7 @@ function buildPopupHtml(place) {
   return `
     <div class="to-popup-card">
       <img class="to-popup-img" src="${escapeHtml(place.img)}" alt="${escapeHtml(place.name)}" />
-      <div class="to-popup-kicker">${escapeHtml(place.tag)}</div>
+      <div class="to-popup-kicker">Day ${escapeHtml(place.day)} · ${escapeHtml(place.tag)}</div>
       <div class="to-popup-name">${escapeHtml(place.name)}</div>
       <div class="to-popup-copy">${escapeHtml(place.desc)}</div>
       <div class="to-popup-meta">${escapeHtml(place.time)} · ★ ${escapeHtml(place.rating)} · ${escapeHtml(place.price)}</div>
@@ -222,7 +257,36 @@ function looksLikeSimpleDestination(value) {
   const trimmed = value.trim();
   return Boolean(trimmed)
     && trimmed.split(/\s+/).length <= 4
-    && !/(budget|cheap|family|romantic|luxury|weekend|trip|itinerary|travel|days?|nights?|adults?|kids?|coffee|food|culture|nightlife|scenic)/i.test(trimmed);
+    && !/(budget|cheap|family|romantic|luxury|weekend|trip|itinerary|travel|days?|nights?|adults?|kids?|coffee|food|culture|nightlife|scenic|wake|sleep|casual|fancy)/i.test(trimmed);
+}
+
+function to12Hour(value) {
+  const [hoursRaw, minutesRaw] = value.split(":");
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw ?? 0);
+  const meridiem = hours >= 12 ? "PM" : "AM";
+  const normalized = hours % 12 || 12;
+  return `${normalized}:${String(minutes).padStart(2, "0")} ${meridiem}`;
+}
+
+function buildPersonalizedPrompt(input, personalization) {
+  const trimmed = input.trim();
+  const adults = personalization.adults;
+  const kids = personalization.withKids ? personalization.kids : 0;
+  const party = `${adults} adults${kids ? ` and ${kids} ${kids === 1 ? "kid" : "kids"}` : ""}`;
+
+  let basePrompt;
+  if (!trimmed) {
+    basePrompt = `Plan a ${personalization.pace.toLowerCase()} ${personalization.days} day trip to Lisbon for ${party} with coffee, food, culture, and scenic highlights`;
+  } else if (looksLikeSimpleDestination(trimmed)) {
+    basePrompt = `Plan a ${personalization.pace.toLowerCase()} ${personalization.days} day trip to ${trimmed} for ${party} with coffee, food, culture, and scenic highlights`;
+  } else if (/(trip|itinerary|travel|vacation|weekend|\d+\s*(day|days|night|nights)|\bto\b|\bin\b)/i.test(trimmed)) {
+    basePrompt = trimmed;
+  } else {
+    basePrompt = `Plan a ${personalization.pace.toLowerCase()} ${personalization.days} day trip inspired by ${trimmed} for ${party}`;
+  }
+
+  return `${basePrompt}. Keep budget around $${personalization.budget}. Wake around ${to12Hour(personalization.wakeTime)} and sleep around ${to12Hour(personalization.sleepTime)}. Lean ${personalization.style.toLowerCase()} in style. ${kids ? `Make it kid-friendly for ${kids} ${kids === 1 ? "kid" : "kids"}.` : "This trip is adults-only."}`;
 }
 
 function buildPlannerPrompt(input, currentPrompt = "") {
@@ -233,7 +297,7 @@ function buildPlannerPrompt(input, currentPrompt = "") {
     return `Plan a balanced 5 day trip to ${trimmed} for 2 adults with coffee, food, culture, and scenic highlights`;
   }
 
-  if (/(^make this|^add |^swap |^keep |^shift |^turn this|^prioritize |^focus on |^less |^more )/i.test(trimmed)) {
+  if (/(^make this|^add |^swap |^keep |^shift |^turn this|^prioritize |^focus on |^less |^more |^change )/i.test(trimmed)) {
     return `${currentPrompt || DEFAULT_PROMPT}. Update it with this change: ${trimmed}`;
   }
 
@@ -244,11 +308,32 @@ function buildPlannerPrompt(input, currentPrompt = "") {
   return currentPrompt ? `${currentPrompt}. Update it with this change: ${trimmed}` : `Plan a balanced 5 day trip inspired by: ${trimmed}`;
 }
 
+function getDayColor(day) {
+  return DAY_COLORS[(day - 1) % DAY_COLORS.length];
+}
+
+function getPreferenceChips(preferences) {
+  if (!preferences) return [];
+  return [
+    `Budget $${preferences.budget.toLocaleString()}`,
+    preferences.kids > 0 ? `${preferences.adults} adults · ${preferences.kids} kids` : `${preferences.adults} adults`,
+    `Wake ${preferences.wakeTime}`,
+    `Sleep ${preferences.sleepTime}`,
+    `${preferences.style} leaning`,
+    `${preferences.pace} pace`,
+  ];
+}
+
 function DashboardScreen({ onLaunch }) {
   const [query, setQuery] = useState("");
+  const [personalization, setPersonalization] = useState(DEFAULT_PERSONALIZATION);
+
+  const updatePersonalization = (field, value) => {
+    setPersonalization((current) => ({ ...current, [field]: value }));
+  };
 
   const handleLaunch = () => {
-    onLaunch(buildPlannerPrompt(query));
+    onLaunch(buildPersonalizedPrompt(query, personalization));
   };
 
   return (
@@ -258,16 +343,16 @@ function DashboardScreen({ onLaunch }) {
         <div className="td-nav-links">
           <div className="td-pill">Global destinations</div>
           <div className="td-pill">Promptable itineraries</div>
-          <div className="td-pill">Map-ready route output</div>
+          <div className="td-pill">Day-by-day map trails</div>
         </div>
       </div>
 
       <div className="td-hero">
         <div className="td-hero-card">
-          <h1 className="td-hero-title">Travel pipelines, not static presets.</h1>
+          <h1 className="td-hero-title">Travel pipelines, now easier to tune before you even generate.</h1>
           <p className="td-hero-copy">
             Start from any city, any tone, or any travel constraint. TripLine routes it into a full itinerary, fills the cards,
-            and maps the path without losing the original planner UI.
+            and maps the path, while giving the planner real personalization data up front.
           </p>
 
           <div className="td-input-wrap">
@@ -282,7 +367,7 @@ function DashboardScreen({ onLaunch }) {
 
           <div className="td-hero-notes">
             {DESTINATION_CHIPS.map((destination) => (
-              <div key={destination} className="td-chip" onClick={() => onLaunch(buildPlannerPrompt(destination))}>{destination}</div>
+              <div key={destination} className="td-chip" onClick={() => onLaunch(buildPersonalizedPrompt(destination, personalization))}>{destination}</div>
             ))}
           </div>
         </div>
@@ -290,26 +375,88 @@ function DashboardScreen({ onLaunch }) {
         <div className="td-hero-card td-side-card">
           <div>
             <div className="td-side-kicker">What ships now</div>
-            <h2 className="td-side-title">Planner-first flow with cleaner entry points</h2>
+            <h2 className="td-side-title">Planner-first flow, cleaner map logic, better trip tuning</h2>
           </div>
           <div className="td-side-list">
             <div className="td-side-item">
-              <strong>Dashboard redirects</strong>
-              Start from themes, destinations, or lightweight prompts, then drop into the same planning canvas.
+              <strong>Personalization section</strong>
+              Budget, kids, wake and sleep times, style leaning, and pace all shape the pipeline before generation.
             </div>
             <div className="td-side-item">
-              <strong>Anywhere generation</strong>
-              The generator is no longer locked to Tokyo. It can route around global destinations from the prompt.
+              <strong>Day-separated route trails</strong>
+              The map no longer reads like one long spaghetti line. Each day has its own route color and filter.
             </div>
             <div className="td-side-item">
               <strong>Diverse follow-ups</strong>
-              Suggestions now push toward family, luxury, local, remote-work, nightlife, and walkable variants.
+              Suggestions now adapt toward family, late-night, slower mornings, style, and local-vs-tourist tradeoffs.
             </div>
           </div>
         </div>
       </div>
 
       <div className="td-sections">
+        <div className="td-panel">
+          <div className="td-section-head">
+            <div>
+              <h2 className="td-section-title">Personalization</h2>
+              <p className="td-section-copy">These settings feed the planner prompt and shape the itinerary output.</p>
+            </div>
+          </div>
+          <div className="td-persona-grid">
+            <div className="td-field">
+              <label>Trip length</label>
+              <input type="number" min="2" max="10" value={personalization.days} onChange={(event) => updatePersonalization("days", Number(event.target.value || 5))} />
+            </div>
+            <div className="td-field">
+              <label>Total budget</label>
+              <input type="number" min="300" step="100" value={personalization.budget} onChange={(event) => updatePersonalization("budget", Number(event.target.value || 2200))} />
+            </div>
+            <div className="td-field">
+              <label>Adults</label>
+              <select value={personalization.adults} onChange={(event) => updatePersonalization("adults", Number(event.target.value))}>
+                {[1, 2, 3, 4, 5, 6].map((count) => <option key={count} value={count}>{count}</option>)}
+              </select>
+            </div>
+            <div className="td-field">
+              <label>Traveling with kids</label>
+              <div className="td-field-inline">
+                <input type="checkbox" checked={personalization.withKids} onChange={(event) => updatePersonalization("withKids", event.target.checked)} />
+                <span>{personalization.withKids ? "Yes" : "No"}</span>
+              </div>
+            </div>
+            <div className="td-field">
+              <label>Kids count</label>
+              <select value={personalization.kids} disabled={!personalization.withKids} onChange={(event) => updatePersonalization("kids", Number(event.target.value))}>
+                {[1, 2, 3, 4].map((count) => <option key={count} value={count}>{count}</option>)}
+              </select>
+            </div>
+            <div className="td-field">
+              <label>Ideal wake time</label>
+              <input type="time" value={personalization.wakeTime} onChange={(event) => updatePersonalization("wakeTime", event.target.value)} />
+            </div>
+            <div className="td-field">
+              <label>Ideal sleep time</label>
+              <input type="time" value={personalization.sleepTime} onChange={(event) => updatePersonalization("sleepTime", event.target.value)} />
+            </div>
+            <div className="td-field">
+              <label>Style leaning</label>
+              <select value={personalization.style} onChange={(event) => updatePersonalization("style", event.target.value)}>
+                <option>Casual</option>
+                <option>Balanced</option>
+                <option>Fancy</option>
+              </select>
+            </div>
+            <div className="td-field">
+              <label>Pace</label>
+              <select value={personalization.pace} onChange={(event) => updatePersonalization("pace", event.target.value)}>
+                <option>Relaxed</option>
+                <option>Balanced</option>
+                <option>Fast-paced</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <div className="td-panel">
           <div className="td-section-head">
             <div>
@@ -355,7 +502,7 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
   const mapDivRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef({});
-  const routeRef = useRef(null);
+  const routeLayersRef = useRef([]);
   const activePlaceIdRef = useRef("");
   const lastPromptRef = useRef("");
 
@@ -363,6 +510,7 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
   const [tileError, setTileError] = useState(false);
   const [trip, setTrip] = useState(null);
   const [activePlaceId, setActivePlaceId] = useState("");
+  const [activeMapDay, setActiveMapDay] = useState(0);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -385,19 +533,28 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
     if (!place || !mapRef.current) return;
 
     const { map, markerIcon } = mapRef.current;
-    Object.entries(markersRef.current).forEach(([id, marker]) => {
-      marker.setIcon(markerIcon(id === place.id));
+    Object.values(markersRef.current).forEach((entry) => {
+      entry.marker.setIcon(markerIcon(entry.day, entry.id === place.id));
     });
 
-    const marker = markersRef.current[place.id];
-    if (!marker) return;
+    const markerEntry = markersRef.current[place.id];
+    if (!markerEntry) return;
 
     if (fly) {
       map.flyTo([place.lat, place.lng], 14, { duration: 0.8 });
     }
 
-    marker.openPopup();
+    markerEntry.marker.openPopup();
   }, []);
+
+  const fitToDay = useCallback((dayNumber) => {
+    if (!trip || !mapRef.current) return;
+    const { map, L } = mapRef.current;
+    const relevant = dayNumber === 0 ? flatPlaces : flatPlaces.filter((place) => place.day === dayNumber);
+    if (!relevant.length) return;
+    const bounds = L.latLngBounds(relevant.map((place) => [place.lat, place.lng]));
+    map.fitBounds(bounds.pad(0.18));
+  }, [flatPlaces, trip]);
 
   const generateTrip = useCallback(async (promptText) => {
     setLoading(true);
@@ -420,8 +577,10 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
 
       const payload = await response.json();
       const nextTrip = payload.trip;
+      const firstPlace = nextTrip.days?.[0]?.items?.[0] ?? null;
       setTrip(nextTrip);
-      setActivePlaceId(nextTrip.days?.[0]?.items?.[0]?.id ?? "");
+      setActivePlaceId(firstPlace?.id ?? "");
+      setActiveMapDay(0);
       setStatusLine(nextTrip.summary || "Itinerary updated.");
     } catch (nextError) {
       setError(nextError.message || "Something went wrong while generating the itinerary.");
@@ -441,8 +600,23 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
 
   const focusPlace = useCallback((place) => {
     setActivePlaceId(place.id);
+    setActiveMapDay(place.day);
     updateMapSelection(place, true);
   }, [updateMapSelection]);
+
+  const handleDayFilter = useCallback((dayNumber) => {
+    setActiveMapDay(dayNumber);
+    if (dayNumber === 0) {
+      fitToDay(0);
+      return;
+    }
+
+    const firstOfDay = flatPlaces.find((place) => place.day === dayNumber);
+    if (firstOfDay) {
+      setActivePlaceId(firstOfDay.id);
+      window.setTimeout(() => updateMapSelection(firstOfDay, true), 100);
+    }
+  }, [fitToDay, flatPlaces, updateMapSelection]);
 
   useEffect(() => {
     if (!document.getElementById("to-fonts")) {
@@ -495,13 +669,16 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
 
     tileLayer.on("tileerror", () => setTileError(true));
 
-    const markerIcon = (active) =>
-      L.divIcon({
+    const markerIcon = (day, active) => {
+      const fill = active ? "#C1442A" : getDayColor(day);
+      const size = active ? 18 : 15;
+      return L.divIcon({
         className: "",
-        html: `<div style="width:16px;height:16px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${active ? "#C1442A" : "#2C4468"};border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)"></div>`,
-        iconSize: [16, 16],
-        iconAnchor: [8, 16],
+        html: `<div style="width:${size}px;height:${size}px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${fill};border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)"></div>`,
+        iconSize: [size, size],
+        iconAnchor: [Math.round(size / 2), size],
       });
+    };
 
     mapRef.current = { map, markerIcon, L };
   }, [leafletReady]);
@@ -517,46 +694,75 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
     if (!trip || !mapRef.current || !flatPlaces.length) return;
 
     const { map, markerIcon, L } = mapRef.current;
-    Object.values(markersRef.current).forEach((marker) => marker.remove());
+    Object.values(markersRef.current).forEach((entry) => entry.marker.remove());
     markersRef.current = {};
-
-    if (routeRef.current) {
-      routeRef.current.remove();
-      routeRef.current = null;
-    }
+    routeLayersRef.current.forEach((entry) => entry.layer.remove());
+    routeLayersRef.current = [];
 
     flatPlaces.forEach((place) => {
-      const marker = L.marker([place.lat, place.lng], { icon: markerIcon(place.id === activePlaceIdRef.current) }).addTo(map);
+      const marker = L.marker([place.lat, place.lng], { icon: markerIcon(place.day, place.id === activePlaceIdRef.current) }).addTo(map);
       marker.bindPopup(buildPopupHtml(place), { maxWidth: 260 });
-      marker.on("click", () => setActivePlaceId(place.id));
-      marker.on("popupopen", () => setActivePlaceId(place.id));
-      markersRef.current[place.id] = marker;
+      marker.on("click", () => {
+        setActivePlaceId(place.id);
+        setActiveMapDay(place.day);
+      });
+      marker.on("popupopen", () => {
+        setActivePlaceId(place.id);
+        setActiveMapDay(place.day);
+      });
+      markersRef.current[place.id] = { id: place.id, day: place.day, marker };
     });
 
-    routeRef.current = L.polyline(flatPlaces.map((place) => [place.lat, place.lng]), {
-      color: "#C1442A",
-      weight: 4,
-      opacity: 0.82,
-      dashArray: "10 10",
-    }).addTo(map);
-
-    const bounds = L.latLngBounds(flatPlaces.map((place) => [place.lat, place.lng]));
-    map.fitBounds(bounds.pad(0.18));
-    window.setTimeout(() => map.invalidateSize(), 120);
+    trip.days.forEach((dayGroup) => {
+      const layer = L.polyline(
+        dayGroup.items.map((place) => [place.lat, place.lng]),
+        {
+          color: getDayColor(dayGroup.day),
+          weight: 4,
+          opacity: 0.8,
+          dashArray: dayGroup.day % 2 === 0 ? "4 8" : undefined,
+        },
+      ).addTo(map);
+      routeLayersRef.current.push({ day: dayGroup.day, layer });
+    });
 
     const selected = flatPlaces.find((place) => place.id === activePlaceIdRef.current) ?? flatPlaces[0];
-    if (selected && selected.id !== activePlaceIdRef.current) {
-      setActivePlaceId(selected.id);
-    }
     if (selected) {
+      if (selected.id !== activePlaceIdRef.current) {
+        setActivePlaceId(selected.id);
+      }
       window.setTimeout(() => updateMapSelection(selected, false), 160);
     }
-  }, [flatPlaces, trip, updateMapSelection]);
+
+    fitToDay(0);
+    window.setTimeout(() => map.invalidateSize(), 120);
+  }, [flatPlaces, fitToDay, trip, updateMapSelection]);
+
+  useEffect(() => {
+    if (!mapRef.current || !trip) return;
+    const { markerIcon } = mapRef.current;
+
+    routeLayersRef.current.forEach(({ day, layer }) => {
+      const isActive = activeMapDay === 0 || activeMapDay === day;
+      layer.setStyle({
+        opacity: isActive ? 0.88 : 0.2,
+        weight: activeMapDay === day ? 6 : 3,
+      });
+    });
+
+    Object.values(markersRef.current).forEach((entry) => {
+      entry.marker.setOpacity(activeMapDay === 0 || activeMapDay === entry.day ? 1 : 0.4);
+      entry.marker.setIcon(markerIcon(entry.day, entry.id === activePlaceIdRef.current));
+    });
+  }, [activeMapDay, activePlaceId, trip]);
 
   useEffect(() => {
     if (!activePlace) return;
     updateMapSelection(activePlace, false);
   }, [activePlace, updateMapSelection]);
+
+  const activeDayName = activeMapDay === 0 ? trip?.destination : trip?.days?.find((day) => day.day === activeMapDay)?.dayName;
+  const preferenceChips = getPreferenceChips(trip?.preferences);
 
   return (
     <div className="to-app">
@@ -585,47 +791,62 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
             <div className="to-meta-item"><div className="to-label">Travelers</div><div className="to-value">{trip?.travelerLabel || "2 adults"}</div></div>
           </div>
 
+          {preferenceChips.length ? (
+            <div className="to-pref-panel">
+              <div className="to-pref-head">
+                <h2 className="to-pref-title">Personalization</h2>
+                <div className="to-pref-copy">This itinerary is currently being routed with these constraints.</div>
+              </div>
+              <div className="to-pref-grid">
+                {preferenceChips.map((chip) => <div key={chip} className="to-pref-chip">{chip}</div>)}
+              </div>
+            </div>
+          ) : null}
+
           {trip?.days?.map((group) => (
             <div className="to-day-block" key={group.day}>
-              <div className="to-day-head">
+              <div className={`to-day-head${activeMapDay === group.day ? " active" : ""}`} onClick={() => handleDayFilter(group.day)}>
                 <div className="to-num">{String(group.day).padStart(2, "0")}</div>
                 <div className="to-name">{group.dayName}</div>
                 <div className="to-rule"></div>
               </div>
 
-              {group.items.map((place) => (
-                <div
-                  key={place.id}
-                  className={`to-place-card${activePlaceId === place.id ? " active" : ""}`}
-                  onClick={() => focusPlace(place)}
-                >
-                  <div className="to-place-time">{place.time}</div>
-                  <div className="to-place-img" style={{ backgroundImage: `url('${place.img}')` }}></div>
-                  <div className="to-place-body">
-                    <div className="to-place-top">
-                      <div className="to-place-name">{place.name}</div>
-                      <div className="to-place-tag">{place.tag}</div>
-                    </div>
-                    <div className="to-place-desc">{place.desc}</div>
-                    <div className="to-place-foot">
-                      <span className="to-stars">{"★".repeat(place.stars)}{"☆".repeat(5 - place.stars)}</span>
-                      <span className="to-rating-num">{place.rating}</span>
-                      <div className="to-place-actions">
-                        <span className="to-price">{place.price}</span>
-                        <a
-                          className="to-place-link"
-                          href={place.primaryLink.href}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          {place.primaryLink.label}
-                        </a>
+              {group.items.map((place) => {
+                const muted = activeMapDay !== 0 && activeMapDay !== place.day;
+                return (
+                  <div
+                    key={place.id}
+                    className={`to-place-card${activePlaceId === place.id ? " active" : ""}${muted ? " muted" : ""}`}
+                    onClick={() => focusPlace(place)}
+                  >
+                    <div className="to-place-time">{place.time}</div>
+                    <div className="to-place-img" style={{ backgroundImage: `url('${place.img}')` }}></div>
+                    <div className="to-place-body">
+                      <div className="to-place-top">
+                        <div className="to-place-name">{place.name}</div>
+                        <div className="to-place-tag">{place.tag}</div>
+                      </div>
+                      <div className="to-place-desc">{place.desc}</div>
+                      <div className="to-place-foot">
+                        <span className="to-stars">{"★".repeat(place.stars)}{"☆".repeat(5 - place.stars)}</span>
+                        <span className="to-rating-num">{place.rating}</span>
+                        <div className="to-place-actions">
+                          <span className="to-price">{place.price}</span>
+                          <a
+                            className="to-place-link"
+                            href={place.primaryLink.href}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {place.primaryLink.label}
+                          </a>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ))}
         </div>
@@ -641,7 +862,7 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
           <div className="to-input-row">
             <input
               type="text"
-              placeholder="Ask for another city, a budget shift, more nightlife, family changes, local vibes, anything..."
+              placeholder="Ask for another city, a budget shift, more nightlife, family changes, later mornings, local vibes, anything..."
               value={inputValue}
               onChange={(event) => setInputValue(event.target.value)}
               onKeyDown={(event) => event.key === "Enter" && !loading && submitPrompt(inputValue)}
@@ -656,7 +877,23 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
       </div>
 
       <div className="to-right">
-        <div className="to-map-badge">{activePlace ? `Day ${activePlace.day} · ${activePlace.dayName}` : trip?.badge || "Mapped itinerary"}</div>
+        <div className="to-map-badge">{activeMapDay === 0 ? (trip?.badge || "Mapped itinerary") : `Day ${activeMapDay} · ${activeDayName}`}</div>
+        {trip?.days?.length ? (
+          <div className="to-map-legend">
+            <button className={`to-map-day-btn all${activeMapDay === 0 ? " active" : ""}`} onClick={() => handleDayFilter(0)}>All days</button>
+            {trip.days.map((dayGroup) => (
+              <button
+                key={dayGroup.day}
+                className={`to-map-day-btn${activeMapDay === dayGroup.day ? " active" : ""}`}
+                style={activeMapDay === dayGroup.day ? { background: getDayColor(dayGroup.day) } : undefined}
+                onClick={() => handleDayFilter(dayGroup.day)}
+              >
+                <span className="to-map-day-swatch" style={{ background: getDayColor(dayGroup.day) }}></span>
+                Day {dayGroup.day}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="to-map" ref={mapDivRef}></div>
         {tileError && (
           <div className="to-tile-warning">

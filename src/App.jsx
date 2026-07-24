@@ -1,14 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-const PLACES = [
-  { day: 1, dayName: "Arrival & Shinjuku", time: "2:40 PM", name: "Hotel Check-in, Shinjuku", desc: "Drop bags at a mid-range tower hotel a five-minute walk from the station — good base for late-night ramen runs.", tag: "Hotel", stars: 4, rating: "4.3", price: "—", lat: 35.6938, lng: 139.7034, img: "https://picsum.photos/seed/shinjuku-hotel/240/240" },
-  { day: 1, dayName: "Arrival & Shinjuku", time: "6:00 PM", name: "Omoide Yokocho", desc: "Narrow smoke-scented alley of tiny yakitori counters — order a few skewers at two or three different stalls.", tag: "Dinner", stars: 5, rating: "4.6", price: "$18", lat: 35.6944, lng: 139.6997, img: "https://picsum.photos/seed/omoide-yokocho/240/240" },
-  { day: 2, dayName: "Akihabara & Coffee", time: "9:30 AM", name: "Onibus Coffee, Nakameguro", desc: "Small-batch roaster along the canal, standing-room only. Their single-origin filter is worth the short line.", tag: "Coffee", stars: 5, rating: "4.7", price: "$5", lat: 35.6440, lng: 139.6989, img: "https://picsum.photos/seed/onibus-coffee/240/240" },
-  { day: 2, dayName: "Akihabara & Coffee", time: "11:15 AM", name: "Akihabara Electric Town", desc: "Multi-floor arcades, retro game shops, and figure stores stacked on top of each other — easy to lose two hours here.", tag: "Explore", stars: 4, rating: "4.4", price: "Free", lat: 35.6984, lng: 139.7731, img: "https://picsum.photos/seed/akihabara-town/240/240" },
-  { day: 2, dayName: "Akihabara & Coffee", time: "1:00 PM", name: "Harajuku Gyozarou", desc: "Cheap, fast, unbeatable pan-fried gyoza — expect a short queue but tables turn over quickly.", tag: "Lunch", stars: 4, rating: "4.2", price: "$10", lat: 35.6702, lng: 139.7016, img: "https://picsum.photos/seed/gyozarou/240/240" },
-  { day: 2, dayName: "Akihabara & Coffee", time: "6:30 PM", name: "Sushi Dai-style Counter, Toyosu", desc: "Omakase counter near the new fish market — go early, it's first-come and worth the wait for the tuna course.", tag: "Dinner", stars: 5, rating: "4.8", price: "$65", lat: 35.6428, lng: 139.7717, img: "https://picsum.photos/seed/sushi-toyosu/240/240" },
-  { day: 3, dayName: "Asakusa & Culture", time: "9:45 AM", name: "Senso-ji Temple", desc: "Tokyo's oldest temple — walk the Nakamise shopping street on the approach for snacks and souvenirs.", tag: "Sightseeing", stars: 5, rating: "4.7", price: "Free", lat: 35.7148, lng: 139.7967, img: "https://picsum.photos/seed/sensoji/240/240" },
-  { day: 3, dayName: "Asakusa & Culture", time: "1:30 PM", name: "teamLab Planets", desc: "Immersive light-and-water art installation — wear shorts, you'll be wading. Book the timed entry in advance.", tag: "Experience", stars: 5, rating: "4.9", price: "$28", lat: 35.6465, lng: 139.7930, img: "https://picsum.photos/seed/teamlab/240/240" },
+const DEFAULT_PROMPT = "Plan a relaxed 5 day Tokyo trip for 2 adults with coffee, anime, sushi, and culture";
+const DEFAULT_CHIPS = [
+  "Lower my budget to $1200",
+  "Add more nightlife",
+  "I don't like seafood",
+  "Make this more romantic",
 ];
 
 const CSS = `
@@ -27,8 +24,11 @@ const CSS = `
   .to-scroll::-webkit-scrollbar-thumb{ background:var(--line); border-radius:8px; }
   .to-eyebrow{ font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--torii); display:flex; align-items:center; gap:8px; margin-bottom:14px; }
   .to-eyebrow::before{ content:""; width:6px; height:6px; border-radius:50%; background:var(--torii); display:inline-block; }
-  .to-title{ font-family:'Fraunces', serif; font-weight:500; font-size:44px; line-height:1.05; letter-spacing:-.01em; color:var(--aizome-deep); margin-bottom:10px; }
-  .to-subtitle{ font-size:16px; color:var(--ink-soft); max-width:520px; line-height:1.55; margin-bottom:26px; }
+  .to-title{ font-family:'Fraunces', serif; font-weight:500; font-size:44px; line-height:1.05; letter-spacing:-.01em; color:var(--aizome-deep); margin:0 0 10px 0; }
+  .to-subtitle{ font-size:16px; color:var(--ink-soft); max-width:520px; line-height:1.55; margin:0 0 16px 0; }
+  .to-status{ font-size:13px; color:var(--aizome-deep); margin-bottom:26px; }
+  .to-status strong{ color:var(--torii); }
+  .to-error{ margin-top:8px; color:var(--torii); }
   .to-trip-meta{ display:flex; gap:22px; flex-wrap:wrap; padding:16px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin-bottom:34px; }
   .to-meta-item .to-label{ font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:4px; }
   .to-meta-item .to-value{ font-size:15px; font-weight:500; }
@@ -40,7 +40,7 @@ const CSS = `
   .to-place-card{ display:flex; background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; margin-bottom:16px; cursor:pointer; transition:box-shadow .18s ease, transform .18s ease, border-color .18s ease; position:relative; }
   .to-place-card:hover{ box-shadow:0 10px 26px -14px rgba(28,44,66,.35); transform:translateY(-2px); border-color:var(--aizome); }
   .to-place-card.active{ border-color:var(--torii); box-shadow:0 0 0 2px rgba(193,68,42,.15); }
-  .to-place-time{ width:78px; flex-shrink:0; background:var(--paper-2); display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:'JetBrains Mono', monospace; font-size:13px; color:var(--aizome-deep); border-right:1px dashed var(--line); position:relative; }
+  .to-place-time{ width:78px; flex-shrink:0; background:var(--paper-2); display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:'JetBrains Mono', monospace; font-size:13px; color:var(--aizome-deep); border-right:1px dashed var(--line); position:relative; text-align:center; padding:0 8px; }
   .to-place-time::before,.to-place-time::after{ content:""; position:absolute; width:12px; height:12px; background:var(--paper); border-radius:50%; right:-6px; }
   .to-place-time::before{ top:-6px; }
   .to-place-time::after{ bottom:-6px; }
@@ -50,38 +50,163 @@ const CSS = `
   .to-place-name{ font-family:'Fraunces', serif; font-size:17px; font-weight:500; color:var(--ink); }
   .to-place-tag{ font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--moss); background:rgba(92,110,78,.1); padding:3px 7px; border-radius:5px; white-space:nowrap; }
   .to-place-desc{ font-size:13.5px; color:var(--ink-soft); line-height:1.5; margin:6px 0 10px 0; }
-  .to-place-foot{ display:flex; align-items:center; gap:14px; font-size:12.5px; }
+  .to-place-foot{ display:flex; align-items:center; gap:14px; font-size:12.5px; flex-wrap:wrap; }
   .to-stars{ color:var(--torii); letter-spacing:1px; }
   .to-rating-num{ color:var(--ink-soft); }
-  .to-price{ margin-left:auto; font-family:'JetBrains Mono', monospace; color:var(--aizome-deep); font-weight:500; }
+  .to-place-actions{ margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .to-price{ font-family:'JetBrains Mono', monospace; color:var(--aizome-deep); font-weight:500; }
+  .to-place-link{ text-decoration:none; font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--aizome-deep); border:1px solid rgba(44,68,104,.18); border-radius:999px; padding:6px 9px; transition:background .15s ease, color .15s ease, border-color .15s ease; }
+  .to-place-link:hover{ background:var(--aizome-deep); color:#fff; border-color:var(--aizome-deep); }
   .to-right{ width:50%; height:100%; position:relative; }
   .to-map{ width:100%; height:100%; }
   .to-map-badge{ position:absolute; top:20px; left:20px; z-index:500; background:rgba(246,244,238,.85); backdrop-filter:blur(10px); border:1px solid var(--line); border-radius:10px; padding:8px 14px; font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--aizome-deep); box-shadow:0 6px 18px -10px rgba(28,44,66,.3); }
   .to-composer{ position:absolute; left:24px; right:24px; bottom:20px; z-index:900; background:rgba(255,255,255,.62); backdrop-filter:blur(22px) saturate(160%); -webkit-backdrop-filter:blur(22px) saturate(160%); border:1px solid rgba(255,255,255,.8); border-radius:18px; box-shadow:0 20px 45px -18px rgba(28,44,66,.35); padding:12px 14px; }
   .to-chips{ display:flex; gap:8px; margin-bottom:10px; overflow-x:auto; }
-  .to-chip{ font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--aizome-deep); background:rgba(44,68,104,.08); border:1px solid rgba(44,68,104,.15); padding:6px 11px; border-radius:20px; white-space:nowrap; cursor:pointer; transition:background .15s ease; }
-  .to-chip:hover{ background:rgba(44,68,104,.16); }
+  .to-chip{ font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--aizome-deep); background:rgba(44,68,104,.08); border:1px solid rgba(44,68,104,.15); padding:6px 11px; border-radius:20px; white-space:nowrap; cursor:pointer; transition:background .15s ease, border-color .15s ease; }
+  .to-chip:hover{ background:rgba(44,68,104,.16); border-color:rgba(44,68,104,.32); }
   .to-input-row{ display:flex; align-items:center; gap:10px; }
   .to-input-row input{ flex:1; border:none; background:transparent; outline:none; font-family:'Work Sans', sans-serif; font-size:14.5px; color:var(--ink); padding:8px 4px; }
   .to-input-row input::placeholder{ color:var(--ink-soft); }
-  .to-send-btn{ background:var(--aizome-deep); color:#fff; border:none; width:38px; height:38px; border-radius:12px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:background .15s ease, transform .1s ease; }
+  .to-send-btn{ background:var(--aizome-deep); color:#fff; border:none; width:38px; height:38px; border-radius:12px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:background .15s ease, transform .1s ease, opacity .15s ease; }
   .to-send-btn:hover{ background:var(--torii); }
   .to-send-btn:active{ transform:scale(.94); }
+  .to-send-btn:disabled{ cursor:wait; opacity:.72; }
   .to-tile-warning{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:40px; font-family:sans-serif; color:#6B655C; background:#F6F4EE; z-index:400; }
-  @media (max-width: 860px){ .to-app{ flex-direction:column; } .to-left,.to-right{ width:100%; height:50%; } }
+  .to-loading{ display:inline-flex; align-items:center; gap:8px; color:var(--torii); }
+  .to-loading::before{ content:""; width:10px; height:10px; border-radius:50%; background:var(--torii); animation:to-pulse 1s ease-in-out infinite; }
+  @keyframes to-pulse{ 0%,100%{ transform:scale(.8); opacity:.55; } 50%{ transform:scale(1); opacity:1; } }
+  .to-popup-card{ width:230px; }
+  .to-popup-img{ width:100%; height:110px; object-fit:cover; border-radius:10px; margin-bottom:10px; }
+  .to-popup-kicker{ font-family:'JetBrains Mono', monospace; font-size:10px; color:var(--moss); text-transform:uppercase; letter-spacing:.07em; margin-bottom:4px; }
+  .to-popup-name{ font-family:'Fraunces', serif; font-size:18px; color:var(--aizome-deep); margin-bottom:6px; }
+  .to-popup-copy{ font-size:13px; line-height:1.45; color:var(--ink-soft); margin-bottom:10px; }
+  .to-popup-meta{ font-size:12px; color:var(--ink); margin-bottom:10px; }
+  .to-popup-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .to-popup-actions a{ text-decoration:none; font-family:'JetBrains Mono', monospace; font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--aizome-deep); border:1px solid rgba(44,68,104,.16); border-radius:999px; padding:7px 10px; }
+  .to-popup-actions a:hover{ background:var(--aizome-deep); color:#fff; }
+  .leaflet-popup-content-wrapper{ border-radius:14px; }
+  .leaflet-popup-content{ margin:12px; }
+  @media (max-width: 860px){ .to-app{ flex-direction:column; } .to-left,.to-right{ width:100%; height:50%; } .to-scroll{ padding:28px 20px 160px 20px; } .to-title{ font-size:36px; } }
 `;
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function buildPopupHtml(place) {
+  return `
+    <div class="to-popup-card">
+      <img class="to-popup-img" src="${escapeHtml(place.img)}" alt="${escapeHtml(place.name)}" />
+      <div class="to-popup-kicker">${escapeHtml(place.tag)}</div>
+      <div class="to-popup-name">${escapeHtml(place.name)}</div>
+      <div class="to-popup-copy">${escapeHtml(place.desc)}</div>
+      <div class="to-popup-meta">${escapeHtml(place.time)} · ★ ${escapeHtml(place.rating)} · ${escapeHtml(place.price)}</div>
+      <div class="to-popup-actions">
+        <a href="${escapeHtml(place.primaryLink.href)}" target="_blank" rel="noreferrer">${escapeHtml(place.primaryLink.label)}</a>
+        <a href="${escapeHtml(place.mapsUrl)}" target="_blank" rel="noreferrer">Directions</a>
+      </div>
+    </div>
+  `;
+}
 
 export default function TravelOS() {
   const mapDivRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef({});
+  const routeRef = useRef(null);
+  const activePlaceIdRef = useRef("");
+
   const [leafletReady, setLeafletReady] = useState(false);
   const [tileError, setTileError] = useState(false);
-  const [activePlace, setActivePlace] = useState(null);
+  const [trip, setTrip] = useState(null);
+  const [activePlaceId, setActivePlaceId] = useState("");
   const [inputValue, setInputValue] = useState("");
-  const [placeholder, setPlaceholder] = useState("Ask to adjust the plan — budget, pace, restaurants, anything…");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [statusLine, setStatusLine] = useState("Generating itinerary pipeline...");
 
-  // Load fonts + Leaflet from CDN
+  const flatPlaces = useMemo(() => trip?.days?.flatMap((day) => day.items) ?? [], [trip]);
+  const activePlace = flatPlaces.find((place) => place.id === activePlaceId) ?? flatPlaces[0] ?? null;
+  const chips = trip?.followUpSuggestions?.length ? trip.followUpSuggestions : DEFAULT_CHIPS;
+
+  useEffect(() => {
+    activePlaceIdRef.current = activePlaceId;
+  }, [activePlaceId]);
+
+  const updateMapSelection = (place, fly = true) => {
+    if (!place || !mapRef.current) return;
+
+    const { map, markerIcon } = mapRef.current;
+    Object.entries(markersRef.current).forEach(([id, marker]) => {
+      marker.setIcon(markerIcon(id === place.id));
+    });
+
+    const marker = markersRef.current[place.id];
+    if (!marker) return;
+
+    if (fly) {
+      map.flyTo([place.lat, place.lng], 14, { duration: 0.8 });
+    }
+
+    marker.openPopup();
+  };
+
+  const generateTrip = async (promptText) => {
+    const prompt = promptText.trim() || DEFAULT_PROMPT;
+
+    setLoading(true);
+    setError("");
+    setStatusLine("Generating itinerary pipeline...");
+
+    try {
+      const response = await fetch("/api/generate-itinerary", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "Generation failed");
+      }
+
+      const payload = await response.json();
+      const nextTrip = payload.trip;
+
+      setTrip(nextTrip);
+      setActivePlaceId(nextTrip.days?.[0]?.items?.[0]?.id ?? "");
+      setStatusLine(nextTrip.summary || "Itinerary updated.");
+    } catch (nextError) {
+      setError(nextError.message || "Something went wrong while generating the itinerary.");
+      setStatusLine("Backend request failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendMsg = () => {
+    const nextPrompt = inputValue.trim();
+    setInputValue("");
+    generateTrip(nextPrompt || DEFAULT_PROMPT);
+  };
+
+  const quickGenerate = (text) => {
+    setInputValue(text);
+    generateTrip(text);
+  };
+
+  const focusPlace = (place) => {
+    setActivePlaceId(place.id);
+    updateMapSelection(place, true);
+  };
+
   useEffect(() => {
     if (!document.getElementById("to-fonts")) {
       const link = document.createElement("link");
@@ -117,12 +242,11 @@ export default function TravelOS() {
     document.body.appendChild(script);
   }, []);
 
-  // Initialize map once Leaflet is ready
   useEffect(() => {
     if (!leafletReady || !mapDivRef.current || mapRef.current) return;
     const L = window.L;
 
-    const map = L.map(mapDivRef.current, { zoomControl: false }).setView([35.6820, 139.7595], 12);
+    const map = L.map(mapDivRef.current, { zoomControl: false }).setView([35.682, 139.7595], 12);
     L.control.zoom({ position: "bottomright" }).addTo(map);
 
     const tileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -140,39 +264,66 @@ export default function TravelOS() {
         iconAnchor: [8, 16],
       });
 
-    PLACES.forEach((p) => {
-      const m = L.marker([p.lat, p.lng], { icon: markerIcon(false) }).addTo(map);
-      m.bindPopup(`<b>${p.name}</b><br>${p.time} · ${p.tag}`);
-      markersRef.current[p.name] = m;
-    });
-
-    mapRef.current = { map, markerIcon };
+    mapRef.current = { map, markerIcon, L };
   }, [leafletReady]);
 
-  const focusPlace = (p) => {
-    setActivePlace(p.name);
-    const { map, markerIcon } = mapRef.current || {};
-    if (!map) return;
-    Object.entries(markersRef.current).forEach(([name, m]) => {
-      m.setIcon(markerIcon(name === p.name));
-    });
-    map.flyTo([p.lat, p.lng], 15, { duration: 0.8 });
-    markersRef.current[p.name].openPopup();
-  };
+  useEffect(() => {
+    generateTrip(DEFAULT_PROMPT);
+  }, []);
 
-  const quickFill = (text) => setInputValue(text);
+  useEffect(() => {
+    if (!trip || !mapRef.current || !flatPlaces.length) return;
 
-  const sendMsg = () => {
-    if (inputValue.trim().length) {
-      setPlaceholder("Updating your itinerary…");
-      setInputValue("");
+    const { map, markerIcon, L } = mapRef.current;
+
+    Object.values(markersRef.current).forEach((marker) => marker.remove());
+    markersRef.current = {};
+
+    if (routeRef.current) {
+      routeRef.current.remove();
+      routeRef.current = null;
     }
-  };
 
-  const dayGroups = PLACES.reduce((acc, p) => {
-    (acc[p.day] ||= []).push(p);
-    return acc;
-  }, {});
+    flatPlaces.forEach((place) => {
+      const marker = L.marker([place.lat, place.lng], { icon: markerIcon(place.id === activePlaceIdRef.current) }).addTo(map);
+      marker.bindPopup(buildPopupHtml(place), { maxWidth: 260 });
+      marker.on("click", () => {
+        setActivePlaceId(place.id);
+      });
+      marker.on("popupopen", () => {
+        setActivePlaceId(place.id);
+      });
+      markersRef.current[place.id] = marker;
+    });
+
+    routeRef.current = L.polyline(
+      flatPlaces.map((place) => [place.lat, place.lng]),
+      {
+        color: "#C1442A",
+        weight: 4,
+        opacity: 0.82,
+        dashArray: "10 10",
+      },
+    ).addTo(map);
+
+    const bounds = L.latLngBounds(flatPlaces.map((place) => [place.lat, place.lng]));
+    map.fitBounds(bounds.pad(0.18));
+    window.setTimeout(() => map.invalidateSize(), 100);
+
+    const selected = flatPlaces.find((place) => place.id === activePlaceIdRef.current) ?? flatPlaces[0];
+    if (selected && selected.id !== activePlaceIdRef.current) {
+      setActivePlaceId(selected.id);
+    }
+
+    if (selected) {
+      window.setTimeout(() => updateMapSelection(selected, false), 160);
+    }
+  }, [trip, flatPlaces]);
+
+  useEffect(() => {
+    if (!activePlace) return;
+    updateMapSelection(activePlace, false);
+  }, [activePlace]);
 
   return (
     <div className="travelos-root">
@@ -181,71 +332,84 @@ export default function TravelOS() {
         <div className="to-left">
           <div className="to-scroll">
             <div className="to-eyebrow">Trip plan · Auto-updating</div>
-            <h1 className="to-title">5 Days in Tokyo</h1>
+            <h1 className="to-title">{trip?.title || "Building your trip..."}</h1>
             <p className="to-subtitle">
-              A relaxed itinerary built around anime culture, specialty coffee, and sushi — nothing before 9&nbsp;AM. Tap any stop to see it on the map.
+              {trip?.subtitle || "TripLine now generates a full itinerary from the prompt, keeps the same interface, and maps the route automatically."}
             </p>
-
-            <div className="to-trip-meta">
-              <div className="to-meta-item"><div className="to-label">Depart</div><div className="to-value">SFO → HND, Jul 24</div></div>
-              <div className="to-meta-item"><div className="to-label">Budget</div><div className="to-value">$1,800 total</div></div>
-              <div className="to-meta-item"><div className="to-label">Pace</div><div className="to-value">Relaxed</div></div>
-              <div className="to-meta-item"><div className="to-label">Travelers</div><div className="to-value">2 adults</div></div>
+            <div className="to-status">
+              {loading ? <span className="to-loading">Generating itinerary</span> : <strong>{statusLine}</strong>}
+              {error ? <div className="to-error">{error}</div> : null}
             </div>
 
-            {Object.keys(dayGroups).sort().map((dayNum) => {
-              const group = dayGroups[dayNum];
-              return (
-                <div className="to-day-block" key={dayNum}>
-                  <div className="to-day-head">
-                    <div className="to-num">{String(dayNum).padStart(2, "0")}</div>
-                    <div className="to-name">{group[0].dayName}</div>
-                    <div className="to-rule"></div>
-                  </div>
+            <div className="to-trip-meta">
+              <div className="to-meta-item"><div className="to-label">Destination</div><div className="to-value">{trip?.destination || "Tokyo"}</div></div>
+              <div className="to-meta-item"><div className="to-label">Budget</div><div className="to-value">{trip?.budgetLabel || "$1,800 total"}</div></div>
+              <div className="to-meta-item"><div className="to-label">Pace</div><div className="to-value">{trip?.paceLabel || "Relaxed"}</div></div>
+              <div className="to-meta-item"><div className="to-label">Travelers</div><div className="to-value">{trip?.travelerLabel || "2 adults"}</div></div>
+            </div>
 
-                  {group.map((p) => (
-                    <div
-                      key={p.name}
-                      className={`to-place-card${activePlace === p.name ? " active" : ""}`}
-                      onClick={() => focusPlace(p)}
-                    >
-                      <div className="to-place-time">{p.time}</div>
-                      <div className="to-place-img" style={{ backgroundImage: `url('${p.img}')` }}></div>
-                      <div className="to-place-body">
-                        <div className="to-place-top">
-                          <div className="to-place-name">{p.name}</div>
-                          <div className="to-place-tag">{p.tag}</div>
-                        </div>
-                        <div className="to-place-desc">{p.desc}</div>
-                        <div className="to-place-foot">
-                          <span className="to-stars">{"★".repeat(p.stars)}{"☆".repeat(5 - p.stars)}</span>
-                          <span className="to-rating-num">{p.rating}</span>
-                          <span className="to-price">{p.price}</span>
+            {trip?.days?.map((group) => (
+              <div className="to-day-block" key={group.day}>
+                <div className="to-day-head">
+                  <div className="to-num">{String(group.day).padStart(2, "0")}</div>
+                  <div className="to-name">{group.dayName}</div>
+                  <div className="to-rule"></div>
+                </div>
+
+                {group.items.map((place) => (
+                  <div
+                    key={place.id}
+                    className={`to-place-card${activePlaceId === place.id ? " active" : ""}`}
+                    onClick={() => focusPlace(place)}
+                  >
+                    <div className="to-place-time">{place.time}</div>
+                    <div className="to-place-img" style={{ backgroundImage: `url('${place.img}')` }}></div>
+                    <div className="to-place-body">
+                      <div className="to-place-top">
+                        <div className="to-place-name">{place.name}</div>
+                        <div className="to-place-tag">{place.tag}</div>
+                      </div>
+                      <div className="to-place-desc">{place.desc}</div>
+                      <div className="to-place-foot">
+                        <span className="to-stars">{"★".repeat(place.stars)}{"☆".repeat(5 - place.stars)}</span>
+                        <span className="to-rating-num">{place.rating}</span>
+                        <div className="to-place-actions">
+                          <span className="to-price">{place.price}</span>
+                          <a
+                            className="to-place-link"
+                            href={place.primaryLink.href}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {place.primaryLink.label}
+                          </a>
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              );
-            })}
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
 
           <div className="to-composer">
             <div className="to-chips">
-              <div className="to-chip" onClick={() => quickFill("Lower my budget to $1200")}>Lower budget to $1,200</div>
-              <div className="to-chip" onClick={() => quickFill("Add a day trip to Kyoto")}>Add a Kyoto day</div>
-              <div className="to-chip" onClick={() => quickFill("I don't like seafood")}>I don't like seafood</div>
-              <div className="to-chip" onClick={() => quickFill("Find a cheaper hotel")}>Find a cheaper hotel</div>
+              {chips.map((chip) => (
+                <div key={chip} className="to-chip" onClick={() => quickGenerate(chip)}>
+                  {chip}
+                </div>
+              ))}
             </div>
             <div className="to-input-row">
               <input
                 type="text"
-                placeholder={placeholder}
+                placeholder="Ask to adjust the plan, budget, pace, food preferences, or city..."
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendMsg()}
+                onChange={(event) => setInputValue(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && !loading && sendMsg()}
               />
-              <button className="to-send-btn" onClick={sendMsg}>
+              <button className="to-send-btn" onClick={sendMsg} disabled={loading}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                   <path d="M4 12L20 4L13 20L11 13L4 12Z" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
                 </svg>
@@ -255,12 +419,12 @@ export default function TravelOS() {
         </div>
 
         <div className="to-right">
-          <div className="to-map-badge">Day 2 · walking route</div>
+          <div className="to-map-badge">{activePlace ? `Day ${activePlace.day} · ${activePlace.dayName}` : trip?.badge || "Full itinerary · mapped route"}</div>
           <div className="to-map" ref={mapDivRef}></div>
           {tileError && (
             <div className="to-tile-warning">
               Map tiles failed to load.<br />
-              This usually means an ad blocker or network filter is blocking tile.openstreetmap.org — try disabling it for this page, or check your network settings.
+              This usually means an ad blocker or network filter is blocking tile.openstreetmap.org.
             </div>
           )}
         </div>

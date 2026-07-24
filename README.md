@@ -1,16 +1,45 @@
-# React + Vite
+# TripLine
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+TripLine is a React + Vite demo that now includes a lightweight local backend for itinerary generation.
 
-Currently, two official plugins are available:
+## What changed
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Chat input now calls a backend pipeline to generate a full itinerary
+- The left-side cards update with real stop data: name, category, description, rating, pricing, and action links
+- The right-side Leaflet map now draws the route trail and highlights each stop
+- Clicking a map stop opens a compact booking/details popup
 
-## React Compiler
+## Run locally
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm install
+npm run dev
+```
 
-## Expanding the Oxlint configuration
+That starts:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+- Vite frontend
+- Local itinerary API on `http://localhost:8787`
+
+## Useful scripts
+
+```bash
+npm run dev      # frontend + backend together
+npm run client   # frontend only
+npm run server   # backend only
+npm run build    # production frontend build
+npm run lint     # oxlint
+```
+
+## Backend endpoint
+
+```bash
+POST /api/generate-itinerary
+Content-Type: application/json
+
+{
+  "prompt": "Plan a relaxed 5 day Tokyo trip for 2 adults with coffee, anime, sushi, and culture"
+}
+```
+
+The backend returns a mapped itinerary payload used directly by the UI.

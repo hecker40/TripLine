@@ -68,7 +68,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "POST" && url.pathname === "/api/generate-itinerary") {
     try {
       const body = await readBody(req);
-      const result = await generateItinerary(body.prompt || "");
+      const result = await generateItinerary(body.prompt || "", body.preferences || {});
       sendJson(res, 200, result);
     } catch (error) {
       sendJson(res, 400, { error: error.message || "Failed to generate itinerary" });

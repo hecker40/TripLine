@@ -423,6 +423,35 @@ function formatMinutes(totalMinutes) {
   return `${hours12}:${String(minutes).padStart(2, "0")} ${meridiem}`;
 }
 
+function toTimeInput(totalMinutes) {
+  const normalized = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
+  const hours24 = Math.floor(normalized / 60);
+  const minutes = normalized % 60;
+  return `${String(hours24).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function normalizeStyle(value, fallback = "Balanced") {
+  if (!value) return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === "fancy") return "Fancy";
+  if (normalized === "casual") return "Casual";
+  return "Balanced";
+}
+
+function normalizePace(value, fallback = "Balanced") {
+  if (!value) return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === "relaxed") return "Relaxed";
+  if (normalized === "fast-paced" || normalized === "fast paced" || normalized === "fast") return "Fast-paced";
+  return "Balanced";
+}
+
+function resolveNumberPreference(value, fallback, min, max) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return clamp(numeric, min, max, fallback);
+}
+
 function extractTimePreference(prompt, type) {
   const patterns = type === "wake"
     ? [
@@ -591,12 +620,11 @@ function buildGenericPlace(kind, district, request, origin, day, index) {
 }
 
 function personalizeTokyoPlans(request) {
-  if (request.kids === 0 && !request.exclusions.noAlcohol && request.sleepMinutes >= 22 * 60) {
-    return TOKYO_PROFILE.dayPlans;
-  }
+  const renamedFirstDay = request.hasArrivalDay ? "Arrival & Shinjuku" : "Shinjuku & Skyline";
 
   return TOKYO_PROFILE.dayPlans.map((plan, planIndex) => ({
     ...plan,
+    dayName: planIndex === 0 ? renamedFirstDay : plan.dayName,
     slots: plan.slots.map((slot, slotIndex) => {
       if (planIndex === 0 && slotIndex === 3) {
         return request.kids > 0 || request.exclusions.noAlcohol || request.sleepMinutes < 22 * 60
@@ -668,21 +696,30 @@ function buildTokyoItinerary(request) {
 function buildDayTemplate(request, day) {
   const eveningKind = request.kids > 0 || request.exclusions.noAlcohol || request.sleepMinutes < 22 * 60
     ? (request.interests.includes("scenic") ? "scenic" : "dinner")
-    : (request.interests.includes("nightlife") ? "nightlife" : "dinner");
+    : (request.interests.includes("nightlife") && request.sleepMinutes >= 22 * 60 + 30 ? "nightlife" : "dinner");
   const morningKind = request.interests.includes("remote") ? "remote" : (request.interests.includes("coffee") ? "coffee" : "culture");
-  const middayKind = request.interests.includes("food") ? "lunch" : (request.interests.includes("culture") ? "culture" : "explore");
+  const middayKind = request.style === "Casual"
+    ? "lunch"
+    : request.interests.includes("food")
+      ? "lunch"
+      : (request.interests.includes("culture") ? "culture" : "explore");
   const afternoonKind = request.kids > 0
     ? (request.interests.includes("nature") ? "nature" : "explore")
-    : request.interests.includes("art")
-      ? "art"
-      : request.interests.includes("nature")
-        ? "nature"
-        : request.interests.includes("shopping")
-          ? "explore"
-          : "scenic";
+    : request.style === "Fancy"
+      ? (request.interests.includes("art") ? "art" : "scenic")
+      : request.interests.includes("art")
+        ? "art"
+        : request.interests.includes("nature")
+          ? "nature"
+          : request.interests.includes("shopping")
+            ? "explore"
+            : "scenic";
 
   if (day === 1) {
-    return ["stay", request.interests.includes("scenic") ? "scenic" : "explore", "dinner", eveningKind];
+    if (request.hasArrivalDay) {
+      return ["stay", request.interests.includes("scenic") ? "scenic" : "explore", "dinner", eveningKind];
+    }
+    return [morningKind, request.interests.includes("culture") ? "culture" : "explore", middayKind, afternoonKind];
   }
 
   return [morningKind, request.interests.includes("culture") ? "culture" : "explore", middayKind, afternoonKind];
@@ -692,33 +729,44 @@ function getDayStartMinutes(request) {
   return request.wakeMinutes + (request.kids > 0 ? 45 : request.pace === "Fast-paced" ? 35 : 60);
 }
 
-function getDayIntervals(request) {
-  if (request.pace === "Fast-paced") return [0, 120, 255, 420];
-  if (request.kids > 0) return [0, 150, 300, 495];
-  return [0, 140, 285, 465];
+function targetTimeForCategory(item, itemIndex, request, isArrivalDay) {
+  const category = item.category || item.tag || "Explore";
+  const wake = request.wakeMinutes;
+  const sleep = request.sleepMinutes;
+  const start = getDayStartMinutes(request);
+  const lunchTime = Math.max(start + 120, wake + 240);
+  const dinnerTime = Math.min(sleep - 150, Math.max(wake + 570, 18 * 60 + 30));
+  const nightlifeTime = Math.min(sleep - 75, Math.max(wake + 690, 21 * 60));
+  const lateAfternoon = Math.min(sleep - 210, Math.max(wake + 420, 16 * 60));
+  const midMorning = Math.max(start + 90, wake + 150);
+
+  if (isArrivalDay) {
+    if (category === "Hotel") return Math.max(14 * 60, wake + 180);
+    if (category === "Dinner") return Math.min(sleep - 150, 19 * 60 + 15);
+    if (category === "Nightlife") return Math.min(sleep - 75, 21 * 60);
+    if (["Viewpoint", "Experience"].includes(category)) return Math.min(sleep - 210, 17 * 60);
+    return Math.max(16 * 60, wake + 270 + itemIndex * 60);
+  }
+
+  if (category === "Hotel") return Math.max(start, wake + 90);
+  if (category === "Coffee") return Math.max(start, wake + 60);
+  if (category === "Lunch") return lunchTime;
+  if (category === "Dinner") return dinnerTime;
+  if (category === "Nightlife") return nightlifeTime;
+  if (["Museum", "Sightseeing"].includes(category)) return midMorning;
+  if (["Experience", "Viewpoint"].includes(category)) return lateAfternoon;
+  if (category === "Explore") return itemIndex <= 1 ? midMorning : lateAfternoon;
+  return start + itemIndex * 135;
 }
 
 function applyScheduleToDays(days, request) {
   return days.map((day, index) => {
-    const isArrivalDay = index === 0;
-    const count = day.items.length;
+    const isArrivalDay = index === 0 && request.hasArrivalDay;
 
-    let times;
-    if (isArrivalDay && count === 4) {
-      const lastTime = Math.max(18 * 60 + 15, request.sleepMinutes - (request.kids > 0 ? 90 : 75));
-      times = [14 * 60 + 30, 17 * 60, 19 * 60 + 15, lastTime];
-    } else {
-      const start = getDayStartMinutes(request);
-      const intervals = getDayIntervals(request);
-      times = intervals.slice(0, count).map((offset) => start + offset);
-      if (count >= 4) {
-        times[count - 1] = Math.min(times[count - 1], request.sleepMinutes - (request.kids > 0 ? 150 : 180));
-      }
-    }
-
-    const normalizedTimes = times.map((time, itemIndex) => {
+    const rawTimes = day.items.map((item, itemIndex) => targetTimeForCategory(item, itemIndex, request, isArrivalDay));
+    const normalizedTimes = rawTimes.map((time, itemIndex) => {
       if (itemIndex === 0) return time;
-      return Math.max(time, times[itemIndex - 1] + 75);
+      return Math.max(time, rawTimes[itemIndex - 1] + 75);
     });
 
     return {
@@ -845,12 +893,15 @@ function finalizeTrip(request, origin, rawDays) {
     summary: `${flatPlaces.length} routed stops across ${days.length} days, with day-by-day trail lines, action links, and map popups ready for demo use.`,
     followUpSuggestions: buildFollowUpSuggestions(request, origin),
     preferences: {
+      days: request.days,
       budget: request.budget,
       adults: request.adults,
       kids: request.kids,
       withKids: request.kids > 0,
       wakeTime: formatMinutes(request.wakeMinutes),
       sleepTime: formatMinutes(request.sleepMinutes),
+      wakeTimeValue: toTimeInput(request.wakeMinutes),
+      sleepTimeValue: toTimeInput(request.sleepMinutes),
       style: request.style,
       pace: request.pace,
     },
@@ -859,36 +910,44 @@ function finalizeTrip(request, origin, rawDays) {
   };
 }
 
-export async function generateItinerary(rawPrompt = "") {
+export async function generateItinerary(rawPrompt = "", explicitPreferences = {}) {
   const prompt = rawPrompt.trim() || DEFAULT_PROMPT;
   const normalizedPrompt = prompt.toLowerCase();
   const initialDestination = extractDestination(prompt);
   const origin = await resolveOrigin(initialDestination);
-  const budget = parseBudget(prompt);
-  const adults = parseAdults(prompt);
-  const kids = parseKids(prompt);
-  const wakeMinutes = getWakeMinutes(prompt, kids);
-  const sleepMinutes = getSleepMinutes(prompt, kids);
-  const style = detectStyle(normalizedPrompt);
+
+  const promptDays = parseDays(prompt);
+  const promptBudget = parseBudget(prompt);
+  const promptAdults = parseAdults(prompt);
+  const promptKids = parseKids(prompt);
+  const adults = resolveNumberPreference(explicitPreferences.adults, promptAdults, 1, 12);
+  const kids = resolveNumberPreference(explicitPreferences.kids, promptKids, 0, 8);
+  const days = resolveNumberPreference(explicitPreferences.days, promptDays, 2, 10);
+  const budget = resolveNumberPreference(explicitPreferences.budget, promptBudget, 300, 25000);
+  const wakeMinutes = parseTimeString(explicitPreferences.wakeTime) ?? getWakeMinutes(prompt, kids);
+  const sleepMinutes = parseTimeString(explicitPreferences.sleepTime) ?? getSleepMinutes(prompt, kids);
+  const pace = normalizePace(explicitPreferences.pace, detectPace(normalizedPrompt));
+  const style = normalizeStyle(explicitPreferences.style, detectStyle(normalizedPrompt));
   const baseBudgetBand = getBudgetBand(budget);
   const styleBudgetBand = clamp(baseBudgetBand + (style === "Fancy" ? 1 : style === "Casual" ? -1 : 0), 1, 3, baseBudgetBand);
 
   const request = {
     prompt,
     destination: origin.displayName,
-    days: parseDays(prompt),
+    days,
     adults,
     kids,
     travelers: adults + kids,
     budget,
     budgetBand: baseBudgetBand,
     styleBudgetBand,
-    pace: detectPace(normalizedPrompt),
+    pace,
     style,
     interests: detectInterests(normalizedPrompt),
     exclusions: detectExclusions(normalizedPrompt),
     wakeMinutes,
     sleepMinutes,
+    hasArrivalDay: /(arrival|landing|land\s+in|check[- ]?in|after\s+flight|flight\s+day)/i.test(prompt),
   };
 
   if (kids > 0 && !request.interests.includes("family")) {

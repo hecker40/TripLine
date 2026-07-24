@@ -2,30 +2,32 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const DEFAULT_PROMPT = "Plan a balanced 5 day trip to Lisbon for 2 adults with coffee, food, scenic views, and culture";
 const DAY_COLORS = ["#C1442A", "#2C4468", "#5C6E4E", "#8F5D2C", "#6D4D8C", "#26717A", "#7A3546", "#596B9C"];
+const STYLE_OPTIONS = ["Casual", "Balanced", "Fancy"];
+const PACE_OPTIONS = ["Relaxed", "Balanced", "Fast-paced"];
 
 const FEATURED_REDIRECTS = [
   {
     title: "Food-first long weekend",
     meta: "3 days · Barcelona",
-    prompt: "Plan a food-first 3 day weekend in Barcelona for 2 adults with coffee, tapas, architecture, and sunset rooftops",
+    prompt: "Plan a food-first 3 day weekend in Barcelona with coffee, tapas, architecture, and sunset rooftops",
     blurb: "Fast, social, and heavy on neighborhoods you can actually walk and snack through.",
   },
   {
     title: "Romantic city escape",
     meta: "4 days · Paris",
-    prompt: "Plan a romantic 4 day Paris trip for 2 adults with cafes, museums, evening views, and one luxury dinner",
+    prompt: "Plan a romantic 4 day Paris trip with cafes, museums, evening views, and one luxury dinner",
     blurb: "A softer pace, stronger evening moments, and more polished dining and skyline stops.",
   },
   {
     title: "Remote-work friendly week",
     meta: "5 days · Lisbon",
-    prompt: "Plan a 5 day Lisbon trip for 2 adults with cowork-friendly cafes, food, scenic walks, and balanced nightlife",
+    prompt: "Plan a 5 day Lisbon trip with cowork-friendly cafes, food, scenic walks, and balanced nightlife",
     blurb: "A travel pipeline that still makes room for laptop blocks, transit ease, and reliable coffee.",
   },
   {
     title: "Family adventure",
     meta: "5 days · Tokyo",
-    prompt: "Plan a family-friendly 5 day Tokyo trip for 2 adults and 2 kids with anime, parks, easy lunches, and immersive attractions",
+    prompt: "Plan a family-friendly 5 day Tokyo trip with anime, parks, easy lunches, and immersive attractions",
     blurb: "Still stylish, just easier to actually execute with kids in the mix.",
   },
 ];
@@ -35,19 +37,19 @@ const DESTINATION_CHIPS = ["Tokyo", "Lisbon", "Paris", "Seoul", "Cape Town", "Me
 const FOCUS_TRACKS = [
   {
     title: "Culture + food",
-    prompt: "Plan a balanced 5 day trip to Rome for 2 adults with historic sights, coffee, local food, and sunset views",
+    prompt: "Plan a trip to Rome with historic sights, coffee, local food, and sunset views",
   },
   {
     title: "Design + shopping",
-    prompt: "Plan a stylish 4 day trip to Seoul for 2 adults with design districts, coffee, shopping, and nightlife",
+    prompt: "Plan a trip to Seoul with design districts, coffee, shopping, and nightlife",
   },
   {
     title: "Nature + slow pace",
-    prompt: "Plan a relaxed 5 day trip to Vancouver for 2 adults with nature walks, coffee, local food, and scenic lookouts",
+    prompt: "Plan a trip to Vancouver with nature walks, coffee, local food, and scenic lookouts",
   },
   {
     title: "Luxury weekend",
-    prompt: "Plan a luxury 3 day Dubai weekend for 2 adults with premium stays, rooftops, and one standout dinner",
+    prompt: "Plan a luxury Dubai weekend with premium stays, rooftops, and one standout dinner",
   },
 ];
 
@@ -55,8 +57,7 @@ const DEFAULT_PERSONALIZATION = {
   days: 5,
   budget: 2200,
   adults: 2,
-  withKids: false,
-  kids: 1,
+  kids: 0,
   wakeTime: "09:00",
   sleepTime: "23:00",
   style: "Balanced",
@@ -74,11 +75,11 @@ const CSS = `
   .travelos-root *{ box-sizing:border-box; }
   .to-app{ display:flex; height:100vh; width:100%; }
   .to-left{ width:50%; height:100%; position:relative; display:flex; flex-direction:column; border-right:1px solid var(--line); }
-  .to-scroll{ overflow-y:auto; height:100%; padding:30px 40px 180px 40px; scrollbar-width:thin; scrollbar-color:var(--line) transparent; }
+  .to-scroll{ overflow-y:auto; height:100%; padding:30px 40px 190px 40px; scrollbar-width:thin; scrollbar-color:var(--line) transparent; }
   .to-scroll::-webkit-scrollbar{ width:8px; }
   .to-scroll::-webkit-scrollbar-thumb{ background:var(--line); border-radius:8px; }
   .to-nav-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; }
-  .to-nav-btn,.td-action,.td-chip,.td-card-link,.td-redirect-card,.td-focus-card,.to-map-day-btn,.to-day-head{ cursor:pointer; }
+  .to-nav-btn,.td-action,.td-chip,.td-card-link,.td-redirect-card,.td-focus-card,.to-map-day-btn,.to-day-head,.to-pref-apply{ cursor:pointer; }
   .to-nav-btn{ border:1px solid rgba(44,68,104,.14); background:rgba(255,255,255,.7); color:var(--aizome-deep); border-radius:999px; padding:8px 12px; font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.04em; text-transform:uppercase; }
   .to-nav-btn:hover{ background:var(--aizome-deep); color:#fff; }
   .to-nav-mini{ font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.04em; color:var(--ink-soft); }
@@ -92,12 +93,22 @@ const CSS = `
   .to-trip-meta{ display:flex; gap:22px; flex-wrap:wrap; padding:16px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin-bottom:18px; }
   .to-meta-item .to-label{ font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:4px; }
   .to-meta-item .to-value{ font-size:15px; font-weight:500; }
-  .to-pref-panel{ border:1px solid var(--line); border-radius:18px; background:rgba(255,255,255,.68); padding:14px 16px; margin-bottom:26px; }
+  .to-pref-panel{ border:1px solid var(--line); border-radius:18px; background:rgba(255,255,255,.72); padding:14px 16px; margin-bottom:26px; }
   .to-pref-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:10px; }
   .to-pref-title{ font-family:'Fraunces', serif; font-size:24px; color:var(--aizome-deep); margin:0; }
   .to-pref-copy{ color:var(--ink-soft); font-size:13px; }
-  .to-pref-grid{ display:flex; flex-wrap:wrap; gap:8px; }
+  .to-pref-grid{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
   .to-pref-chip{ border-radius:999px; background:rgba(44,68,104,.08); border:1px solid rgba(44,68,104,.12); padding:7px 10px; font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.03em; color:var(--aizome-deep); }
+  .to-pref-form{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+  .to-pref-field{ display:flex; flex-direction:column; gap:6px; }
+  .to-pref-field label{ font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-soft); }
+  .to-pref-field input,.to-pref-field select{ width:100%; border:1px solid rgba(44,68,104,.14); border-radius:13px; padding:10px 11px; background:#fff; color:var(--ink); font:inherit; }
+  .to-pref-inline{ display:flex; align-items:center; gap:8px; min-height:44px; padding:10px 11px; background:#fff; border:1px solid rgba(44,68,104,.14); border-radius:13px; }
+  .to-pref-inline input[type="checkbox"]{ width:16px; height:16px; margin:0; }
+  .to-pref-actions{ display:flex; justify-content:flex-end; margin-top:12px; }
+  .to-pref-apply{ border:none; background:var(--aizome-deep); color:#fff; border-radius:12px; padding:10px 14px; font-family:'JetBrains Mono', monospace; font-size:11px; letter-spacing:.05em; text-transform:uppercase; }
+  .to-pref-apply:hover{ background:var(--torii); }
+  .to-pref-apply:disabled{ opacity:.72; cursor:wait; }
   .to-day-block{ margin-bottom:44px; }
   .to-day-head{ display:flex; align-items:baseline; gap:12px; margin-bottom:20px; transition:opacity .15s ease; }
   .to-day-head:hover{ opacity:.9; }
@@ -203,8 +214,7 @@ const CSS = `
   .td-field input,.td-field select{ width:100%; border:1px solid rgba(44,68,104,.14); border-radius:14px; padding:11px 12px; background:#fff; color:var(--ink); font:inherit; }
   .td-field-inline{ display:flex; align-items:center; gap:8px; padding:11px 12px; background:#fff; border:1px solid rgba(44,68,104,.14); border-radius:14px; min-height:47px; }
   .td-field-inline input[type="checkbox"]{ width:16px; height:16px; margin:0; }
-  .td-destination-row{ display:flex; flex-wrap:wrap; gap:10px; }
-  @media (max-width: 1140px){ .td-hero{ grid-template-columns:1fr; } .td-grid,.td-persona-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width: 1140px){ .td-hero{ grid-template-columns:1fr; } .td-grid,.td-persona-grid,.to-pref-form{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
   @media (max-width: 860px){
     .to-app{ flex-direction:column; height:auto; min-height:100vh; }
     .to-left,.to-right{ width:100%; height:auto; min-height:50vh; }
@@ -213,20 +223,194 @@ const CSS = `
     .to-title{ font-size:36px; }
     .td-shell{ padding:24px 20px 32px 20px; }
     .td-hero-title{ font-size:40px; }
-    .td-grid,.td-persona-grid{ grid-template-columns:1fr; }
+    .td-grid,.td-persona-grid,.to-pref-form{ grid-template-columns:1fr; }
     .td-input-wrap,.to-input-row{ flex-direction:column; }
     .td-action,.to-send-btn{ width:100%; }
     .to-map-legend{ top:74px; }
   }
 `;
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+function clampNumber(value, min, max, fallback) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(Math.max(numeric, min), max);
+}
+
+function parseTimeValue(value) {
+  if (!value) return null;
+  const normalized = String(value).trim();
+  const twentyFour = normalized.match(/^(\d{1,2}):(\d{2})$/);
+  if (twentyFour) {
+    const hours = Number(twentyFour[1]);
+    const minutes = Number(twentyFour[2]);
+    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+      return hours * 60 + minutes;
+    }
+  }
+
+  const twelve = normalized.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i);
+  if (twelve) {
+    let hours = Number(twelve[1]);
+    const minutes = Number(twelve[2] ?? 0);
+    const meridiem = twelve[3].toLowerCase();
+    if (meridiem === "pm" && hours < 12) hours += 12;
+    if (meridiem === "am" && hours === 12) hours = 0;
+    return hours * 60 + minutes;
+  }
+
+  return null;
+}
+
+function timeInputFromMinutes(totalMinutes) {
+  const normalized = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
+  const hours = Math.floor(normalized / 60);
+  const minutes = normalized % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function to12Hour(value) {
+  const minutes = parseTimeValue(value);
+  if (minutes == null) return value;
+  const hours24 = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  const meridiem = hours24 >= 12 ? "PM" : "AM";
+  const hours12 = hours24 % 12 || 12;
+  return `${hours12}:${String(mins).padStart(2, "0")} ${meridiem}`;
+}
+
+function normalizePersonalization(input = {}) {
+  const wakeMinutes = parseTimeValue(input.wakeTime ?? input.wakeTimeValue ?? DEFAULT_PERSONALIZATION.wakeTime) ?? parseTimeValue(DEFAULT_PERSONALIZATION.wakeTime);
+  const sleepMinutes = parseTimeValue(input.sleepTime ?? input.sleepTimeValue ?? DEFAULT_PERSONALIZATION.sleepTime) ?? parseTimeValue(DEFAULT_PERSONALIZATION.sleepTime);
+  const style = STYLE_OPTIONS.includes(input.style) ? input.style : DEFAULT_PERSONALIZATION.style;
+  const pace = PACE_OPTIONS.includes(input.pace) ? input.pace : DEFAULT_PERSONALIZATION.pace;
+
+  return {
+    days: clampNumber(input.days, 2, 10, DEFAULT_PERSONALIZATION.days),
+    budget: clampNumber(input.budget, 300, 25000, DEFAULT_PERSONALIZATION.budget),
+    adults: clampNumber(input.adults, 1, 12, DEFAULT_PERSONALIZATION.adults),
+    kids: clampNumber(input.kids, 0, 8, DEFAULT_PERSONALIZATION.kids),
+    wakeTime: timeInputFromMinutes(wakeMinutes),
+    sleepTime: timeInputFromMinutes(sleepMinutes),
+    style,
+    pace,
+  };
+}
+
+function personalizationFromTrip(preferences) {
+  if (!preferences) return DEFAULT_PERSONALIZATION;
+  return normalizePersonalization({
+    days: preferences.days,
+    budget: preferences.budget,
+    adults: preferences.adults,
+    kids: preferences.kids,
+    wakeTime: preferences.wakeTimeValue ?? preferences.wakeTime,
+    sleepTime: preferences.sleepTimeValue ?? preferences.sleepTime,
+    style: preferences.style,
+    pace: preferences.pace,
+  });
+}
+
+function buildApiPreferences(personalization) {
+  return {
+    days: personalization.days,
+    budget: personalization.budget,
+    adults: personalization.adults,
+    kids: personalization.kids,
+    wakeTime: personalization.wakeTime,
+    sleepTime: personalization.sleepTime,
+    style: personalization.style,
+    pace: personalization.pace,
+  };
+}
+
+function partyLabel(preferences) {
+  if (preferences.kids > 0) {
+    return `${preferences.adults} adults and ${preferences.kids} ${preferences.kids === 1 ? "kid" : "kids"}`;
+  }
+  return `${preferences.adults} ${preferences.adults === 1 ? "adult" : "adults"}`;
+}
+
+function looksLikeSimpleDestination(value) {
+  const trimmed = value.trim();
+  return Boolean(trimmed)
+    && trimmed.split(/\s+/).length <= 4
+    && !/(budget|cheap|family|romantic|luxury|weekend|trip|itinerary|travel|days?|nights?|adults?|kids?|coffee|food|culture|nightlife|scenic|wake|sleep|casual|fancy)/i.test(trimmed);
+}
+
+function buildLaunchPrompt(input, preferences) {
+  const trimmed = input.trim();
+  const starter = `Plan a ${preferences.pace.toLowerCase()} ${preferences.days} day trip`;
+  const crowd = partyLabel(preferences);
+
+  if (!trimmed) {
+    return `${starter} to Lisbon for ${crowd} with coffee, food, culture, and scenic highlights`;
+  }
+
+  if (looksLikeSimpleDestination(trimmed)) {
+    return `${starter} to ${trimmed} for ${crowd} with coffee, food, culture, and scenic highlights`;
+  }
+
+  if (/(trip|itinerary|travel|vacation|weekend|\d+\s*(day|days|night|nights)|\bto\b|\bin\b)/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `${starter} inspired by ${trimmed} for ${crowd}`;
+}
+
+function buildPromptUpdate(input, currentPrompt = "") {
+  const trimmed = input.trim();
+  if (!trimmed) return currentPrompt || DEFAULT_PROMPT;
+
+  if (looksLikeSimpleDestination(trimmed)) {
+    return `Plan a trip to ${trimmed}`;
+  }
+
+  if (/(^make this|^add |^swap |^keep |^shift |^turn this|^prioritize |^focus on |^less |^more |^change |^start )/i.test(trimmed)) {
+    return `${currentPrompt || DEFAULT_PROMPT}. Update it with this change: ${trimmed}`;
+  }
+
+  if (/(trip|itinerary|travel|vacation|weekend|\bto\b|\bin\b|\d+\s*(day|days|night|nights))/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return currentPrompt ? `${currentPrompt}. Update it with this change: ${trimmed}` : `Plan a trip inspired by: ${trimmed}`;
+}
+
+function getDayColor(day) {
+  return DAY_COLORS[(day - 1) % DAY_COLORS.length];
+}
+
+function getPreferenceChips(preferences) {
+  if (!preferences) return [];
+  return [
+    `${preferences.days} days`,
+    `Budget $${preferences.budget.toLocaleString()}`,
+    preferences.kids > 0 ? `${preferences.adults} adults · ${preferences.kids} ${preferences.kids === 1 ? "kid" : "kids"}` : `${preferences.adults} adults`,
+    `Wake ${to12Hour(preferences.wakeTime)}`,
+    `Sleep ${to12Hour(preferences.sleepTime)}`,
+    `${preferences.style} leaning`,
+    `${preferences.pace} pace`,
+  ];
+}
+
+function getRouteState() {
+  const url = new URL(window.location.href);
+  const search = url.searchParams;
+
+  return {
+    path: url.pathname === "/plan" ? "/plan" : "/",
+    prompt: search.get("prompt") ?? "",
+    preferences: normalizePersonalization({
+      days: search.get("days") ?? undefined,
+      budget: search.get("budget") ?? undefined,
+      adults: search.get("adults") ?? undefined,
+      kids: search.get("kids") ?? undefined,
+      wakeTime: search.get("wake") ?? undefined,
+      sleepTime: search.get("sleep") ?? undefined,
+      style: search.get("style") ?? undefined,
+      pace: search.get("pace") ?? undefined,
+    }),
+  };
 }
 
 function buildPopupHtml(place) {
@@ -245,95 +429,86 @@ function buildPopupHtml(place) {
   `;
 }
 
-function getRouteState() {
-  const url = new URL(window.location.href);
-  return {
-    path: url.pathname === "/plan" ? "/plan" : "/",
-    prompt: url.searchParams.get("prompt") ?? "",
-  };
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
-function looksLikeSimpleDestination(value) {
-  const trimmed = value.trim();
-  return Boolean(trimmed)
-    && trimmed.split(/\s+/).length <= 4
-    && !/(budget|cheap|family|romantic|luxury|weekend|trip|itinerary|travel|days?|nights?|adults?|kids?|coffee|food|culture|nightlife|scenic|wake|sleep|casual|fancy)/i.test(trimmed);
+function PersonalizationFields({ value, onChange, prefix = "td" }) {
+  const withKids = value.kids > 0;
+  const setField = (field, nextValue) => onChange((current) => ({ ...current, [field]: nextValue }));
+  const setKidsEnabled = (enabled) => onChange((current) => ({ ...current, kids: enabled ? Math.max(1, current.kids || 1) : 0 }));
+
+  const fieldClass = prefix === "to" ? "to-pref-field" : "td-field";
+  const inlineClass = prefix === "to" ? "to-pref-inline" : "td-field-inline";
+
+  return (
+    <>
+      <div className={fieldClass}>
+        <label>Trip length</label>
+        <input type="number" min="2" max="10" value={value.days} onChange={(event) => setField("days", clampNumber(event.target.value, 2, 10, value.days))} />
+      </div>
+      <div className={fieldClass}>
+        <label>Total budget</label>
+        <input type="number" min="300" step="100" value={value.budget} onChange={(event) => setField("budget", clampNumber(event.target.value, 300, 25000, value.budget))} />
+      </div>
+      <div className={fieldClass}>
+        <label>Adults</label>
+        <select value={value.adults} onChange={(event) => setField("adults", Number(event.target.value))}>
+          {[1, 2, 3, 4, 5, 6].map((count) => <option key={count} value={count}>{count}</option>)}
+        </select>
+      </div>
+      <div className={fieldClass}>
+        <label>Traveling with kids</label>
+        <div className={inlineClass}>
+          <input type="checkbox" checked={withKids} onChange={(event) => setKidsEnabled(event.target.checked)} />
+          <span>{withKids ? "Yes" : "No"}</span>
+        </div>
+      </div>
+      <div className={fieldClass}>
+        <label>Kids count</label>
+        <select value={Math.max(1, value.kids || 1)} disabled={!withKids} onChange={(event) => setField("kids", Number(event.target.value))}>
+          {[1, 2, 3, 4].map((count) => <option key={count} value={count}>{count}</option>)}
+        </select>
+      </div>
+      <div className={fieldClass}>
+        <label>Ideal wake time</label>
+        <input type="time" value={value.wakeTime} onChange={(event) => setField("wakeTime", event.target.value)} />
+      </div>
+      <div className={fieldClass}>
+        <label>Ideal sleep time</label>
+        <input type="time" value={value.sleepTime} onChange={(event) => setField("sleepTime", event.target.value)} />
+      </div>
+      <div className={fieldClass}>
+        <label>Style leaning</label>
+        <select value={value.style} onChange={(event) => setField("style", event.target.value)}>
+          {STYLE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      </div>
+      <div className={fieldClass}>
+        <label>Pace</label>
+        <select value={value.pace} onChange={(event) => setField("pace", event.target.value)}>
+          {PACE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      </div>
+    </>
+  );
 }
 
-function to12Hour(value) {
-  const [hoursRaw, minutesRaw] = value.split(":");
-  const hours = Number(hoursRaw);
-  const minutes = Number(minutesRaw ?? 0);
-  const meridiem = hours >= 12 ? "PM" : "AM";
-  const normalized = hours % 12 || 12;
-  return `${normalized}:${String(minutes).padStart(2, "0")} ${meridiem}`;
-}
-
-function buildPersonalizedPrompt(input, personalization) {
-  const trimmed = input.trim();
-  const adults = personalization.adults;
-  const kids = personalization.withKids ? personalization.kids : 0;
-  const party = `${adults} adults${kids ? ` and ${kids} ${kids === 1 ? "kid" : "kids"}` : ""}`;
-
-  let basePrompt;
-  if (!trimmed) {
-    basePrompt = `Plan a ${personalization.pace.toLowerCase()} ${personalization.days} day trip to Lisbon for ${party} with coffee, food, culture, and scenic highlights`;
-  } else if (looksLikeSimpleDestination(trimmed)) {
-    basePrompt = `Plan a ${personalization.pace.toLowerCase()} ${personalization.days} day trip to ${trimmed} for ${party} with coffee, food, culture, and scenic highlights`;
-  } else if (/(trip|itinerary|travel|vacation|weekend|\d+\s*(day|days|night|nights)|\bto\b|\bin\b)/i.test(trimmed)) {
-    basePrompt = trimmed;
-  } else {
-    basePrompt = `Plan a ${personalization.pace.toLowerCase()} ${personalization.days} day trip inspired by ${trimmed} for ${party}`;
-  }
-
-  return `${basePrompt}. Keep budget around $${personalization.budget}. Wake around ${to12Hour(personalization.wakeTime)} and sleep around ${to12Hour(personalization.sleepTime)}. Lean ${personalization.style.toLowerCase()} in style. ${kids ? `Make it kid-friendly for ${kids} ${kids === 1 ? "kid" : "kids"}.` : "This trip is adults-only."}`;
-}
-
-function buildPlannerPrompt(input, currentPrompt = "") {
-  const trimmed = input.trim();
-  if (!trimmed) return currentPrompt || DEFAULT_PROMPT;
-
-  if (looksLikeSimpleDestination(trimmed)) {
-    return `Plan a balanced 5 day trip to ${trimmed} for 2 adults with coffee, food, culture, and scenic highlights`;
-  }
-
-  if (/(^make this|^add |^swap |^keep |^shift |^turn this|^prioritize |^focus on |^less |^more |^change )/i.test(trimmed)) {
-    return `${currentPrompt || DEFAULT_PROMPT}. Update it with this change: ${trimmed}`;
-  }
-
-  if (/(trip|itinerary|travel|vacation|weekend|\bto\b|\bin\b|\d+\s*(day|days|night|nights))/i.test(trimmed)) {
-    return trimmed;
-  }
-
-  return currentPrompt ? `${currentPrompt}. Update it with this change: ${trimmed}` : `Plan a balanced 5 day trip inspired by: ${trimmed}`;
-}
-
-function getDayColor(day) {
-  return DAY_COLORS[(day - 1) % DAY_COLORS.length];
-}
-
-function getPreferenceChips(preferences) {
-  if (!preferences) return [];
-  return [
-    `Budget $${preferences.budget.toLocaleString()}`,
-    preferences.kids > 0 ? `${preferences.adults} adults · ${preferences.kids} kids` : `${preferences.adults} adults`,
-    `Wake ${preferences.wakeTime}`,
-    `Sleep ${preferences.sleepTime}`,
-    `${preferences.style} leaning`,
-    `${preferences.pace} pace`,
-  ];
-}
-
-function DashboardScreen({ onLaunch }) {
+function DashboardScreen({ onLaunch, initialPreferences }) {
   const [query, setQuery] = useState("");
-  const [personalization, setPersonalization] = useState(DEFAULT_PERSONALIZATION);
+  const [personalization, setPersonalization] = useState(normalizePersonalization(initialPreferences));
 
-  const updatePersonalization = (field, value) => {
-    setPersonalization((current) => ({ ...current, [field]: value }));
-  };
+  useEffect(() => {
+    setPersonalization(normalizePersonalization(initialPreferences));
+  }, [initialPreferences]);
 
   const handleLaunch = () => {
-    onLaunch(buildPersonalizedPrompt(query, personalization));
+    onLaunch(buildLaunchPrompt(query, personalization), personalization);
   };
 
   return (
@@ -342,17 +517,17 @@ function DashboardScreen({ onLaunch }) {
         <div className="td-mark">TripLine · dashboard</div>
         <div className="td-nav-links">
           <div className="td-pill">Global destinations</div>
-          <div className="td-pill">Promptable itineraries</div>
-          <div className="td-pill">Day-by-day map trails</div>
+          <div className="td-pill">Structured preferences</div>
+          <div className="td-pill">Day-by-day route trails</div>
         </div>
       </div>
 
       <div className="td-hero">
         <div className="td-hero-card">
-          <h1 className="td-hero-title">Travel pipelines, now easier to tune before you even generate.</h1>
+          <h1 className="td-hero-title">Travel pipelines that actually respect your settings.</h1>
           <p className="td-hero-copy">
-            Start from any city, any tone, or any travel constraint. TripLine routes it into a full itinerary, fills the cards,
-            and maps the path, while giving the planner real personalization data up front.
+            Start from any city, any tone, or any travel constraint. TripLine now sends structured preferences into the itinerary engine,
+            so timing, family-friendliness, budget, and route tone can adapt instead of just being hinted at in the prompt.
           </p>
 
           <div className="td-input-wrap">
@@ -367,28 +542,28 @@ function DashboardScreen({ onLaunch }) {
 
           <div className="td-hero-notes">
             {DESTINATION_CHIPS.map((destination) => (
-              <div key={destination} className="td-chip" onClick={() => onLaunch(buildPersonalizedPrompt(destination, personalization))}>{destination}</div>
+              <div key={destination} className="td-chip" onClick={() => onLaunch(buildLaunchPrompt(destination, personalization), personalization)}>{destination}</div>
             ))}
           </div>
         </div>
 
         <div className="td-hero-card td-side-card">
           <div>
-            <div className="td-side-kicker">What ships now</div>
-            <h2 className="td-side-title">Planner-first flow, cleaner map logic, better trip tuning</h2>
+            <div className="td-side-kicker">What changed</div>
+            <h2 className="td-side-title">Customization is now a real control surface</h2>
           </div>
           <div className="td-side-list">
             <div className="td-side-item">
-              <strong>Personalization section</strong>
-              Budget, kids, wake and sleep times, style leaning, and pace all shape the pipeline before generation.
+              <strong>Structured preferences</strong>
+              Budget, kids, wake and sleep times, pace, and style are sent directly to the backend instead of only being inferred from text.
             </div>
             <div className="td-side-item">
-              <strong>Day-separated route trails</strong>
-              The map no longer reads like one long spaghetti line. Each day has its own route color and filter.
+              <strong>Day-specific map routes</strong>
+              Each day has its own trail, color, and filter, so the route reads clearly instead of collapsing into one confusing path.
             </div>
             <div className="td-side-item">
-              <strong>Diverse follow-ups</strong>
-              Suggestions now adapt toward family, late-night, slower mornings, style, and local-vs-tourist tradeoffs.
+              <strong>Planner-side editing</strong>
+              You can change the same preferences from inside the planner and re-run the trip against them.
             </div>
           </div>
         </div>
@@ -399,61 +574,11 @@ function DashboardScreen({ onLaunch }) {
           <div className="td-section-head">
             <div>
               <h2 className="td-section-title">Personalization</h2>
-              <p className="td-section-copy">These settings feed the planner prompt and shape the itinerary output.</p>
+              <p className="td-section-copy">These settings now travel with the route and shape the itinerary output directly.</p>
             </div>
           </div>
           <div className="td-persona-grid">
-            <div className="td-field">
-              <label>Trip length</label>
-              <input type="number" min="2" max="10" value={personalization.days} onChange={(event) => updatePersonalization("days", Number(event.target.value || 5))} />
-            </div>
-            <div className="td-field">
-              <label>Total budget</label>
-              <input type="number" min="300" step="100" value={personalization.budget} onChange={(event) => updatePersonalization("budget", Number(event.target.value || 2200))} />
-            </div>
-            <div className="td-field">
-              <label>Adults</label>
-              <select value={personalization.adults} onChange={(event) => updatePersonalization("adults", Number(event.target.value))}>
-                {[1, 2, 3, 4, 5, 6].map((count) => <option key={count} value={count}>{count}</option>)}
-              </select>
-            </div>
-            <div className="td-field">
-              <label>Traveling with kids</label>
-              <div className="td-field-inline">
-                <input type="checkbox" checked={personalization.withKids} onChange={(event) => updatePersonalization("withKids", event.target.checked)} />
-                <span>{personalization.withKids ? "Yes" : "No"}</span>
-              </div>
-            </div>
-            <div className="td-field">
-              <label>Kids count</label>
-              <select value={personalization.kids} disabled={!personalization.withKids} onChange={(event) => updatePersonalization("kids", Number(event.target.value))}>
-                {[1, 2, 3, 4].map((count) => <option key={count} value={count}>{count}</option>)}
-              </select>
-            </div>
-            <div className="td-field">
-              <label>Ideal wake time</label>
-              <input type="time" value={personalization.wakeTime} onChange={(event) => updatePersonalization("wakeTime", event.target.value)} />
-            </div>
-            <div className="td-field">
-              <label>Ideal sleep time</label>
-              <input type="time" value={personalization.sleepTime} onChange={(event) => updatePersonalization("sleepTime", event.target.value)} />
-            </div>
-            <div className="td-field">
-              <label>Style leaning</label>
-              <select value={personalization.style} onChange={(event) => updatePersonalization("style", event.target.value)}>
-                <option>Casual</option>
-                <option>Balanced</option>
-                <option>Fancy</option>
-              </select>
-            </div>
-            <div className="td-field">
-              <label>Pace</label>
-              <select value={personalization.pace} onChange={(event) => updatePersonalization("pace", event.target.value)}>
-                <option>Relaxed</option>
-                <option>Balanced</option>
-                <option>Fast-paced</option>
-              </select>
-            </div>
+            <PersonalizationFields value={personalization} onChange={setPersonalization} prefix="td" />
           </div>
         </div>
 
@@ -466,7 +591,7 @@ function DashboardScreen({ onLaunch }) {
           </div>
           <div className="td-grid">
             {FEATURED_REDIRECTS.map((card) => (
-              <div key={card.title} className="td-redirect-card" onClick={() => onLaunch(card.prompt)}>
+              <div key={card.title} className="td-redirect-card" onClick={() => onLaunch(card.prompt, personalization)}>
                 <div className="td-card-meta">{card.meta}</div>
                 <h3 className="td-card-title">{card.title}</h3>
                 <p className="td-card-copy">{card.blurb}</p>
@@ -485,7 +610,7 @@ function DashboardScreen({ onLaunch }) {
           </div>
           <div className="td-grid">
             {FOCUS_TRACKS.map((track) => (
-              <div key={track.title} className="td-focus-card" onClick={() => onLaunch(track.prompt)}>
+              <div key={track.title} className="td-focus-card" onClick={() => onLaunch(track.prompt, personalization)}>
                 <h3 className="td-card-title">{track.title}</h3>
                 <p className="td-card-copy">Seed the planner with a stronger bias, then keep iterating from the chat box.</p>
                 <div className="td-card-link">Generate route →</div>
@@ -498,17 +623,18 @@ function DashboardScreen({ onLaunch }) {
   );
 }
 
-function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
+function PlannerScreen({ routePrompt, routePreferences, onBack, onRouteCommit }) {
   const mapDivRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef({});
   const routeLayersRef = useRef([]);
   const activePlaceIdRef = useRef("");
-  const lastPromptRef = useRef("");
+  const lastRunSignatureRef = useRef("");
 
   const [leafletReady, setLeafletReady] = useState(false);
   const [tileError, setTileError] = useState(false);
   const [trip, setTrip] = useState(null);
+  const [preferences, setPreferences] = useState(normalizePersonalization(routePreferences));
   const [activePlaceId, setActivePlaceId] = useState("");
   const [activeMapDay, setActiveMapDay] = useState(0);
   const [inputValue, setInputValue] = useState("");
@@ -528,6 +654,10 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
   useEffect(() => {
     activePlaceIdRef.current = activePlaceId;
   }, [activePlaceId]);
+
+  useEffect(() => {
+    setPreferences(normalizePersonalization(routePreferences));
+  }, [routePreferences]);
 
   const updateMapSelection = useCallback((place, fly = true) => {
     if (!place || !mapRef.current) return;
@@ -556,7 +686,7 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
     map.fitBounds(bounds.pad(0.18));
   }, [flatPlaces, trip]);
 
-  const generateTrip = useCallback(async (promptText) => {
+  const generateTrip = useCallback(async (promptText, nextPreferences) => {
     setLoading(true);
     setError("");
     setStatusLine("Generating itinerary pipeline...");
@@ -567,7 +697,10 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ prompt: promptText }),
+        body: JSON.stringify({
+          prompt: promptText,
+          preferences: buildApiPreferences(nextPreferences),
+        }),
       });
 
       if (!response.ok) {
@@ -579,6 +712,7 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
       const nextTrip = payload.trip;
       const firstPlace = nextTrip.days?.[0]?.items?.[0] ?? null;
       setTrip(nextTrip);
+      setPreferences(personalizationFromTrip(nextTrip.preferences));
       setActivePlaceId(firstPlace?.id ?? "");
       setActiveMapDay(0);
       setStatusLine(nextTrip.summary || "Itinerary updated.");
@@ -591,12 +725,19 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
   }, []);
 
   const submitPrompt = useCallback((rawInput) => {
-    const effectivePrompt = buildPlannerPrompt(rawInput, trip?.request?.prompt || routePrompt || DEFAULT_PROMPT);
-    lastPromptRef.current = effectivePrompt;
-    onPromptCommit(effectivePrompt);
+    const effectivePrompt = buildPromptUpdate(rawInput, trip?.request?.prompt || routePrompt || DEFAULT_PROMPT);
+    const nextPreferences = normalizePersonalization(preferences);
+    onRouteCommit(effectivePrompt, nextPreferences);
     setInputValue("");
-    generateTrip(effectivePrompt);
-  }, [generateTrip, onPromptCommit, routePrompt, trip?.request?.prompt]);
+    generateTrip(effectivePrompt, nextPreferences);
+  }, [generateTrip, onRouteCommit, preferences, routePrompt, trip?.request?.prompt]);
+
+  const applyPreferences = useCallback(() => {
+    const nextPreferences = normalizePersonalization(preferences);
+    const currentPrompt = trip?.request?.prompt || routePrompt || buildLaunchPrompt("", nextPreferences);
+    onRouteCommit(currentPrompt, nextPreferences);
+    generateTrip(currentPrompt, nextPreferences);
+  }, [generateTrip, onRouteCommit, preferences, routePrompt, trip?.request?.prompt]);
 
   const focusPlace = useCallback((place) => {
     setActivePlaceId(place.id);
@@ -684,11 +825,14 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
   }, [leafletReady]);
 
   useEffect(() => {
-    const nextPrompt = routePrompt.trim() || DEFAULT_PROMPT;
-    if (nextPrompt === lastPromptRef.current) return;
-    lastPromptRef.current = nextPrompt;
-    generateTrip(nextPrompt);
-  }, [generateTrip, routePrompt]);
+    const normalizedPreferences = normalizePersonalization(routePreferences);
+    const nextPrompt = routePrompt.trim() || buildLaunchPrompt("", normalizedPreferences);
+    const signature = JSON.stringify({ prompt: nextPrompt, preferences: buildApiPreferences(normalizedPreferences) });
+    if (signature === lastRunSignatureRef.current) return;
+
+    lastRunSignatureRef.current = signature;
+    generateTrip(nextPrompt, normalizedPreferences);
+  }, [generateTrip, routePreferences, routePrompt]);
 
   useEffect(() => {
     if (!trip || !mapRef.current || !flatPlaces.length) return;
@@ -734,9 +878,9 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
       window.setTimeout(() => updateMapSelection(selected, false), 160);
     }
 
-    fitToDay(0);
+    fitToDay(activeMapDay || 0);
     window.setTimeout(() => map.invalidateSize(), 120);
-  }, [flatPlaces, fitToDay, trip, updateMapSelection]);
+  }, [activeMapDay, fitToDay, flatPlaces, trip, updateMapSelection]);
 
   useEffect(() => {
     if (!mapRef.current || !trip) return;
@@ -762,7 +906,7 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
   }, [activePlace, updateMapSelection]);
 
   const activeDayName = activeMapDay === 0 ? trip?.destination : trip?.days?.find((day) => day.day === activeMapDay)?.dayName;
-  const preferenceChips = getPreferenceChips(trip?.preferences);
+  const preferenceChips = getPreferenceChips(preferences);
 
   return (
     <div className="to-app">
@@ -770,7 +914,7 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
         <div className="to-scroll">
           <div className="to-nav-row">
             <button className="to-nav-btn" onClick={onBack}>← Dashboard</button>
-            <div className="to-nav-mini">Global itinerary mode</div>
+            <div className="to-nav-mini">Structured itinerary mode</div>
           </div>
 
           <div className="to-eyebrow">Trip plan · Auto-updating</div>
@@ -791,17 +935,23 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
             <div className="to-meta-item"><div className="to-label">Travelers</div><div className="to-value">{trip?.travelerLabel || "2 adults"}</div></div>
           </div>
 
-          {preferenceChips.length ? (
-            <div className="to-pref-panel">
-              <div className="to-pref-head">
+          <div className="to-pref-panel">
+            <div className="to-pref-head">
+              <div>
                 <h2 className="to-pref-title">Personalization</h2>
-                <div className="to-pref-copy">This itinerary is currently being routed with these constraints.</div>
-              </div>
-              <div className="to-pref-grid">
-                {preferenceChips.map((chip) => <div key={chip} className="to-pref-chip">{chip}</div>)}
+                <div className="to-pref-copy">These settings now directly drive the itinerary generation and schedule times.</div>
               </div>
             </div>
-          ) : null}
+            <div className="to-pref-grid">
+              {preferenceChips.map((chip) => <div key={chip} className="to-pref-chip">{chip}</div>)}
+            </div>
+            <div className="to-pref-form">
+              <PersonalizationFields value={preferences} onChange={setPreferences} prefix="to" />
+            </div>
+            <div className="to-pref-actions">
+              <button className="to-pref-apply" onClick={applyPreferences} disabled={loading}>Apply preferences</button>
+            </div>
+          </div>
 
           {trip?.days?.map((group) => (
             <div className="to-day-block" key={group.day}>
@@ -862,7 +1012,7 @@ function PlannerScreen({ routePrompt, onBack, onPromptCommit }) {
           <div className="to-input-row">
             <input
               type="text"
-              placeholder="Ask for another city, a budget shift, more nightlife, family changes, later mornings, local vibes, anything..."
+              placeholder="Ask for another city, later mornings, calmer nights, family changes, local vibes, anything..."
               value={inputValue}
               onChange={(event) => setInputValue(event.target.value)}
               onKeyDown={(event) => event.key === "Enter" && !loading && submitPrompt(inputValue)}
@@ -915,19 +1065,30 @@ export default function TravelOS() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  const updateRoute = useCallback((path, prompt = "", replace = false) => {
+  const updateRoute = useCallback((path, prompt = "", preferences = routeState.preferences, replace = false) => {
+    const normalizedPreferences = normalizePersonalization(preferences);
     const url = new URL(window.location.href);
     url.pathname = path;
+
     if (prompt) {
       url.searchParams.set("prompt", prompt);
     } else {
       url.searchParams.delete("prompt");
     }
 
+    url.searchParams.set("days", String(normalizedPreferences.days));
+    url.searchParams.set("budget", String(normalizedPreferences.budget));
+    url.searchParams.set("adults", String(normalizedPreferences.adults));
+    url.searchParams.set("kids", String(normalizedPreferences.kids));
+    url.searchParams.set("wake", normalizedPreferences.wakeTime);
+    url.searchParams.set("sleep", normalizedPreferences.sleepTime);
+    url.searchParams.set("style", normalizedPreferences.style);
+    url.searchParams.set("pace", normalizedPreferences.pace);
+
     const nextUrl = `${url.pathname}${url.search}`;
     window.history[replace ? "replaceState" : "pushState"]({}, "", nextUrl);
     setRouteState(getRouteState());
-  }, []);
+  }, [routeState.preferences]);
 
   return (
     <div className="travelos-root">
@@ -935,11 +1096,15 @@ export default function TravelOS() {
       {routeState.path === "/plan" ? (
         <PlannerScreen
           routePrompt={routeState.prompt}
-          onBack={() => updateRoute("/")}
-          onPromptCommit={(prompt) => updateRoute("/plan", prompt, true)}
+          routePreferences={routeState.preferences}
+          onBack={() => updateRoute("/", "", routeState.preferences)}
+          onRouteCommit={(prompt, preferences) => updateRoute("/plan", prompt, preferences, true)}
         />
       ) : (
-        <DashboardScreen onLaunch={(prompt) => updateRoute("/plan", prompt)} />
+        <DashboardScreen
+          initialPreferences={routeState.preferences}
+          onLaunch={(prompt, preferences) => updateRoute("/plan", prompt, preferences)}
+        />
       )}
     </div>
   );

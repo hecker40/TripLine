@@ -547,7 +547,10 @@ function scoreTokyoPlace(place, slot, request) {
   score -= Math.abs((place.budgetTier ?? 2) - request.styleBudgetBand) * 4;
   if (request.style === "Fancy" && (place.tags ?? []).includes("luxury")) score += 8;
   if (request.style === "Casual" && (place.tags ?? []).includes("budget")) score += 6;
-  if (request.kids > 0 && (place.tags ?? []).includes("family")) score += 8;
+  if (request.kids > 0 && (place.tags ?? []).includes("family")) score += 10 + request.familyIntensity * 2;
+  if (request.kids >= 2 && (place.tags ?? []).includes("walk")) score += 5;
+  if (request.kids >= 2 && place.category === "Nightlife") score -= 18;
+  if (request.kids >= 3 && ["Viewpoint", "Explore"].includes(place.category)) score += 4;
 
   return score + place.rating;
 }
@@ -567,13 +570,14 @@ function pickFrom(list, seed) {
 
 function deriveDistrictPool(request) {
   const prefixes = [];
+  if (request.kids >= 2) prefixes.push("Garden Belt", "Civic Spine", "Harbor Front");
   if (request.interests.includes("culture")) prefixes.push("Historic Core");
   if (request.interests.includes("art")) prefixes.push("Gallery Row");
-  if (request.interests.includes("shopping")) prefixes.push("Design Mile");
+  if (request.interests.includes("shopping") && request.kids < 3) prefixes.push("Design Mile");
   if (request.interests.includes("nature")) prefixes.push("Garden Belt");
   if (request.interests.includes("nightlife") && request.kids === 0 && !request.exclusions.noAlcohol) prefixes.push("Night Quarter");
   if (request.interests.includes("food")) prefixes.push("Market District");
-  if (request.interests.includes("remote")) prefixes.push("Studio Lane");
+  if (request.interests.includes("remote") && request.kids < 2) prefixes.push("Studio Lane");
 
   const merged = [...new Set([...prefixes, ...DISTRICT_LABELS])];
   return merged.slice(0, 8);
@@ -599,8 +603,12 @@ function buildGenericPlace(kind, district, request, origin, day, index) {
   const blueprint = KIND_BLUEPRINTS[kind] ?? KIND_BLUEPRINTS.explore;
   const seed = hashString(`${request.destination}-${district}-${kind}-${day}-${index}-${request.prompt}`);
   const label = pickFrom(blueprint.labels, seed);
-  const desc = `${pickFrom(blueprint.desc, seed)} In ${origin.displayName}${origin.country ? `, ${origin.country}` : ""}, this slot is tuned to the trip's ${request.pace.toLowerCase()} pace. ${stylePhrase(request.style)}`;
-  const position = offsetCoordinates(origin, seed, 0.012 + day * 0.003 + index * 0.0025);
+  const familyNote = request.kids > 0
+    ? ` The routing also keeps a ${request.kids === 1 ? "single kid" : `${request.kids}-kid`} group in mind by shortening transfers and avoiding overly fussy handoffs.`
+    : "";
+  const desc = `${pickFrom(blueprint.desc, seed)} In ${origin.displayName}${origin.country ? `, ${origin.country}` : ""}, this slot is tuned to the trip's ${request.pace.toLowerCase()} pace. ${stylePhrase(request.style)}${familyNote}`;
+  const compactness = Math.max(0.62, 1 - request.familyIntensity * 0.1);
+  const position = offsetCoordinates(origin, seed, (0.012 + day * 0.003 + index * 0.0025) * compactness);
 
   return enrichPlace(
     {
@@ -611,7 +619,7 @@ function buildGenericPlace(kind, district, request, origin, day, index) {
       price: priceFor(kind, request),
       budgetTier: request.styleBudgetBand,
       district,
-      tags: [...new Set([...(blueprint.tags ?? []), kind, ...request.interests.slice(0, 3), request.kids > 0 ? "family" : "adult"] )],
+      tags: [...new Set([...(blueprint.tags ?? []), kind, ...request.interests.slice(0, 3), request.kids > 0 ? "family" : "adult"])],
       lat: position.lat,
       lng: position.lng,
     },
@@ -697,14 +705,17 @@ function buildDayTemplate(request, day) {
   const eveningKind = request.kids > 0 || request.exclusions.noAlcohol || request.sleepMinutes < 22 * 60
     ? (request.interests.includes("scenic") ? "scenic" : "dinner")
     : (request.interests.includes("nightlife") && request.sleepMinutes >= 22 * 60 + 30 ? "nightlife" : "dinner");
-  const morningKind = request.interests.includes("remote") ? "remote" : (request.interests.includes("coffee") ? "coffee" : "culture");
+  const morningKind = request.interests.includes("remote") && request.kids < 2 ? "remote" : (request.interests.includes("coffee") ? "coffee" : "culture");
   const middayKind = request.style === "Casual"
     ? "lunch"
     : request.interests.includes("food")
       ? "lunch"
       : (request.interests.includes("culture") ? "culture" : "explore");
+  const familyAfternoonKind = request.familyIntensity >= 2
+    ? (request.interests.includes("nature") ? "nature" : "scenic")
+    : (request.interests.includes("nature") ? "nature" : "explore");
   const afternoonKind = request.kids > 0
-    ? (request.interests.includes("nature") ? "nature" : "explore")
+    ? familyAfternoonKind
     : request.style === "Fancy"
       ? (request.interests.includes("art") ? "art" : "scenic")
       : request.interests.includes("art")
@@ -719,14 +730,22 @@ function buildDayTemplate(request, day) {
     if (request.hasArrivalDay) {
       return ["stay", request.interests.includes("scenic") ? "scenic" : "explore", "dinner", eveningKind];
     }
+    if (request.familyIntensity >= 2) {
+      return [morningKind, "nature", "lunch", afternoonKind];
+    }
     return [morningKind, request.interests.includes("culture") ? "culture" : "explore", middayKind, afternoonKind];
+  }
+
+  if (request.familyIntensity >= 2) {
+    return [morningKind, "nature", "lunch", afternoonKind];
   }
 
   return [morningKind, request.interests.includes("culture") ? "culture" : "explore", middayKind, afternoonKind];
 }
 
 function getDayStartMinutes(request) {
-  return request.wakeMinutes + (request.kids > 0 ? 45 : request.pace === "Fast-paced" ? 35 : 60);
+  if (request.kids > 0) return request.wakeMinutes + 40 + request.familyIntensity * 15;
+  return request.wakeMinutes + (request.pace === "Fast-paced" ? 35 : 60);
 }
 
 function targetTimeForCategory(item, itemIndex, request, isArrivalDay) {
@@ -734,11 +753,11 @@ function targetTimeForCategory(item, itemIndex, request, isArrivalDay) {
   const wake = request.wakeMinutes;
   const sleep = request.sleepMinutes;
   const start = getDayStartMinutes(request);
-  const lunchTime = Math.max(start + 120, wake + 240);
-  const dinnerTime = Math.min(sleep - 150, Math.max(wake + 570, 18 * 60 + 30));
+  const lunchTime = Math.max(start + 105, wake + 225);
+  const dinnerTime = Math.min(sleep - (request.kids > 0 ? 120 + request.familyIntensity * 15 : 150), Math.max(wake + 540, 18 * 60 + (request.kids > 0 ? 0 : 30)));
   const nightlifeTime = Math.min(sleep - 75, Math.max(wake + 690, 21 * 60));
-  const lateAfternoon = Math.min(sleep - 210, Math.max(wake + 420, 16 * 60));
-  const midMorning = Math.max(start + 90, wake + 150);
+  const lateAfternoon = Math.min(sleep - (request.kids > 0 ? 165 : 210), Math.max(wake + 390, 15 * 60 + 30));
+  const midMorning = Math.max(start + 75, wake + 135);
 
   if (isArrivalDay) {
     if (category === "Hotel") return Math.max(14 * 60, wake + 180);
@@ -764,9 +783,10 @@ function applyScheduleToDays(days, request) {
     const isArrivalDay = index === 0 && request.hasArrivalDay;
 
     const rawTimes = day.items.map((item, itemIndex) => targetTimeForCategory(item, itemIndex, request, isArrivalDay));
+    const minimumGap = 75 + request.familyIntensity * 10;
     const normalizedTimes = rawTimes.map((time, itemIndex) => {
       if (itemIndex === 0) return time;
-      return Math.max(time, rawTimes[itemIndex - 1] + 75);
+      return Math.max(time, rawTimes[itemIndex - 1] + minimumGap);
     });
 
     return {
@@ -859,6 +879,8 @@ function buildFollowUpSuggestions(request, origin) {
   if (!request.interests.includes("nature")) suggestions.push("Add an outdoor or park-heavy afternoon");
   if (request.wakeMinutes < 9 * 60) suggestions.push("Start the days later, nothing before 10 AM");
   if (request.sleepMinutes > 22 * 60 + 30 && request.kids === 0) suggestions.push("Push one night later with rooftop drinks");
+  if (request.kids >= 2) suggestions.push("Make this stroller-friendly and extra compact");
+  if (request.kids >= 3) suggestions.push("Reduce transit hops even more for a bigger family group");
 
   return [...new Set(suggestions)].slice(0, 8);
 }
@@ -937,6 +959,7 @@ export async function generateItinerary(rawPrompt = "", explicitPreferences = {}
     days,
     adults,
     kids,
+    familyIntensity: Math.min(kids, 4),
     travelers: adults + kids,
     budget,
     budgetBand: baseBudgetBand,

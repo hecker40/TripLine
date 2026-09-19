@@ -25,7 +25,7 @@ function shutdown(signal = "SIGTERM") {
 }
 
 const api = run(process.execPath, ["--import", "tsx", "server/index.ts"]);
-const vite = run("npx", ["vite", "--port", "5173", "--strictPort"]);
+const vite = run("npx", ["vite", "--host", "127.0.0.1", "--port", "5173", "--strictPort"]);
 
 const exitHandler = (signal) => {
   shutdown(signal);

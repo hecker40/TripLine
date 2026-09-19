@@ -64,3 +64,12 @@ test('SDK connection timeout becomes a retryable application error', async () =>
   await assert.rejects(new PlannerAgent(new OpenAIProvider(transport)).generateItinerary(preferences),
     (error: unknown) => error instanceof AppError && error.code === 'PLANNER_TIMEOUT');
 });
+
+test('invalid credentials produce an actionable error without leaking provider details', async () => {
+  const transport: typeof fetch = async () => Response.json({
+    error: { message: 'private-key-detail', type: 'invalid_request_error', code: 'invalid_api_key' },
+  }, { status: 401 });
+  await assert.rejects(new PlannerAgent(new OpenAIProvider(transport)).generateItinerary(preferences),
+    (error: unknown) => error instanceof AppError && error.code === 'AI_AUTHENTICATION_FAILED'
+      && error.status === 503 && !error.message.includes('private-key-detail'));
+});

@@ -32,6 +32,9 @@ export class OpenAIProvider implements AIProvider {
       if (error instanceof SyntaxError || error instanceof ZodError) {
         throw new AppError('INVALID_AI_OUTPUT', 'The planner returned an invalid itinerary. Please try again.', 502);
       }
+      if (error instanceof OpenAI.APIError && error.status === 401) {
+        throw new AppError('AI_AUTHENTICATION_FAILED', 'OpenAI rejected the configured site API key. Update TRAVELOS_OPENAI_API_KEY on the server, then restart or redeploy.', 503);
+      }
       // Never log provider messages, request bodies, headers, or user preferences.
       console.error('[provider] request failed', { status: error instanceof OpenAI.APIError ? error.status : undefined });
       throw new AppError('ITINERARY_GENERATION_FAILED', 'We could not generate your itinerary. Please try again.', 502);

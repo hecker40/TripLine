@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { config } from "dotenv";
+
+config({ path: '.env.local', quiet: true });
 
 const children = [];
 
@@ -21,7 +24,7 @@ function shutdown(signal = "SIGTERM") {
   }
 }
 
-const api = run(process.execPath, ["server/index.js"], { PORT: "8787" });
+const api = run(process.execPath, ["--import", "tsx", "server/index.ts"]);
 const vite = run("npx", ["vite"]);
 
 const exitHandler = (signal) => {
@@ -33,10 +36,8 @@ process.on("SIGINT", exitHandler);
 process.on("SIGTERM", exitHandler);
 
 api.on("exit", (code) => {
-  if (code && code !== 0) {
-    shutdown("SIGTERM");
-    process.exit(code);
-  }
+  shutdown("SIGTERM");
+  process.exit(code ?? 0);
 });
 
 vite.on("exit", (code) => {

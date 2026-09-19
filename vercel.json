@@ -4,9 +4,17 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/trips/generate.ts": { "maxDuration": 120 }
+    "api/trips/generate.ts": {
+      "maxDuration": 120
+    },
+    "api/runtime.ts": {
+      "maxDuration": 300
+    }
   },
   "rewrites": [
-    { "source": "/plan", "destination": "/index.html" }
+    {
+      "source": "/plan",
+      "destination": "/index.html"
+    }
   ]
 }

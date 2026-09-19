@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
@@ -9,7 +13,18 @@
     "noEmit": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": ["node", "vite/client"]
+    "types": [
+      "node",
+      "vite/client"
+    ]
   },
-  "include": ["src", "api", "server/**/*.ts", "shared", "tests", "playwright.config.ts"]
+  "include": [
+    "src",
+    "api",
+    "server/**/*.ts",
+    "shared",
+    "tests",
+    "playwright.config.ts",
+    "scripts/**/*.ts"
+  ]
 }

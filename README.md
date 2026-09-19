@@ -1,129 +1,116 @@
 # TravelOS
 
-Milestone 1: preferences → Planner Agent → validated itinerary → inspect / regenerate.
-Built on the repository's existing React + Vite frontend and lightweight Node HTTP server.
-The former template generator, external map loading, and conversational edits have been
-replaced by a single real AI planning flow. The earlier prototype remains in Git history.
+**Generate → Break → Observe → Recover → Approve.**
 
-## Run
+A working hackathon application with a real LLM planner, optional **TrueForge harness**, map/timeline, streamed AgentOps, constraint checks, bounded repair, model fallback, execution budgets, controlled tools, and demonstration approvals.
 
-Requires Node **22.12+** and npm.
+## Jeffrey: deploy from GitHub to Vercel
+
+1. Import `hecker40/TripLine` with the **Vite** preset. The included `vercel.json` builds the frontend and deploys the root `api/` server functions. Use Node 22.14+ and Fluid Compute (the runtime function allows up to 300 seconds).
+2. In **Settings → Environment Variables**, set `TRAVELOS_OPENAI_API_KEY` to the **full working site key**, for Production and any Preview environment you use. It belongs in Vercel, not Git. A local `.env.local` does not transfer on a Git push.
+3. Set `TRAVELOS_OPENAI_MODEL=gpt-4o-mini`. For a deployment without a hosted TrueForge server, set `TRAVELOS_ENGINE=openai` (the default). The interface honestly identifies direct mode.
+4. Redeploy after setting/changing variables. Open the latest project domain, not an old immutable preview URL.
+Vercel builds fail early with an actionable message if the key/harness check fails, instead of publishing a planner that cannot authenticate.
+
+5. Use **Verify connection** in the application. `GET /api/runtime?verify=1` reports key/model readiness without returning credentials. Then generate a trip. `HOST` and `PORT` are not needed on Vercel.
+
+### TrueForge on the deployed application
+
+TrueForge is a **separate long-running server**, not a Vercel serverless function. Host it using [TrueForge's hosted instructions](https://trueforge.dev/quickstart), configure its OpenAI provider, and set on Vercel:
+
+```env
+TRAVELOS_ENGINE=trueforge
+TRUEFORGE_BASE_URL=https://your-harness.example.com
+TRUEFORGE_TOKEN=your_oidc_id_token_if_required
+```
+
+The official `@truefoundry/trueforge-sdk` creates actual sessions, supplies the structured JSON schema, consumes turn events, and validates completion. A configured but unavailable harness errors explicitly; it is never silently labelled connected. In the harness, configure model aliases `gpt-4o-mini` and `gpt-4-1-mini` (upstream IDs `gpt-4o-mini` and `gpt-4.1-mini`).
+
+## Run locally
 
 ```sh
 npm ci
-cp .env.example .env.local
-# Set TRAVELOS_OPENAI_API_KEY in .env.local using your editor.
+cp .env.example .env.local   # only on a new checkout; do not overwrite an existing key
+# Set TRAVELOS_OPENAI_API_KEY in .env.local using an editor.
+npm run check:llm
 npm run dev
 ```
 
-Open the Vite URL printed in the terminal (normally http://localhost:5173).
-The backend listens on http://127.0.0.1:8787; Vite proxies `/api` to it.
+Open http://localhost:5173. The local API runs on 127.0.0.1:8787. For a built local server: `npm run build && npm start`.
+
+### Local TrueForge demo
+
+In terminal 1:
+
+```sh
+npm run harness
+```
+
+In terminal 2 (with the working site key in `.env.local`):
+
+```sh
+npm run harness:setup
+```
+
+The setup command configures the local harness provider without printing the key. Add to `.env.local` and restart `npm run dev`:
+
+```env
+TRAVELOS_ENGINE=trueforge
+TRUEFORGE_BASE_URL=http://127.0.0.1:8790
+```
+
+The TrueForge standalone server is for **localhost only**. Use its hosted mode for shared deployment. Hosted OIDC tokens must be renewed as required by your identity provider. The local setup script refuses remote credential provisioning unless explicitly enabled.
+
+## Demo script
+
+1. Generate Tokyo, 4 days, 2 travelers, $1,500; interests food/culture/technology; wake-up 09:00.
+2. Inspect the map, daily timeline, two budgets, evaluations, and live AgentOps trace.
+3. In **Chaos lab**, inject a **hotel price spike**. The simulated price is raised enough to cross the budget; the planner proposes an alternative for the affected stay and preserves other activities.
+4. Inject **restaurant closure**; only that activity changes. Inspect the revision history and explanation.
+5. Inject **route timeout**: three failed attempts with two backoffs, then previously computed route estimates are recovered. If no cached coordinates existed, that is reported rather than fabricated.
+6. Inject **unauthorized cancellation**: capability check blocks it. Inject **booking approval** and approve/deny. These are demonstration requests; no reservation or payment adapter exists.
+7. Inject **model failure** to exercise the actual alternate-model call. **Budget reduction** triggers broader repair; **rain** proposes one indoor replacement.
+
+## Architecture
+
+```text
+React workspace + Leaflet map + AgentOps
+  → /api/runtime (streamed NDJSON; same handler locally and on Vercel)
+    → signed trip state + policy and execution budget checks
+    → Research tools (live city geocoding / weather when available)
+    → Planner (OpenAI or official TrueForge SDK)
+    → deterministic structural / budget / wake-up checks
+    → bounded repair + LLM preference critic
+    → signed result / targeted chaos recovery / approval state
+```
+
+- `shared/`: preferences, itinerary and runtime contracts.
+- `server/runtime/`: engine, model routing/cost reservation, TrueForge adapter, tools, evaluation, signed state, readiness.
+- `server/routes/`: HTTP transport and read-only MCP endpoint.
+- `api/`: Vercel Functions. Legacy `/api/trips/generate` remains available for compatibility.
+- `src/runtime/`: streamed state, real map, AgentOps. `src/App.tsx` is the rebuilt workspace.
+- `scripts/`: safe connection checks and local TrueForge setup.
+- `tests/`: contract, API, runtime, provider and responsive browser coverage. Mock providers exist only in tests.
+
+### MCP
+
+`POST /api/mcp` is a stateless JSON-RPC MCP endpoint supporting initialize, tools/list and tools/call. It exposes only `places.search` (Open-Meteo city geocoding) and `routes.estimate` (explicitly approximate geometry). No arbitrary URLs, shell, payment or cancellation tools. Set `TRAVELOS_MCP_TOKEN` to require a bearer token for this endpoint. It can be added to TrueForge's connector settings; travel orchestration also uses the same controlled tool implementations directly.
+
+### Environment
 
 | Variable | Purpose |
 | --- | --- |
-| `TRAVELOS_OPENAI_API_KEY` | Required server-side **site** key. No fallback to the host's `OPENAI_API_KEY`. |
-| `TRAVELOS_OPENAI_MODEL` | One model supporting Responses structured output; defaults to `gpt-4o-mini`. |
-| `PORT` | Node server port; defaults to `8787`. |
-| `HOST` | Bind address; defaults to `127.0.0.1`. Use `0.0.0.0` when required by a hosting platform. |
+| `TRAVELOS_OPENAI_API_KEY` | Required server-side site key. Never read from browser or committed source. |
+| `TRAVELOS_OPENAI_MODEL` | Default `gpt-4o-mini`. |
+| `TRAVELOS_REASONING_MODEL` | Repair model; default `gpt-4.1-mini`. |
+| `TRAVELOS_FALLBACK_MODEL` | Alternate model; default `gpt-4.1-mini`. |
+| `TRAVELOS_ENGINE` | `openai` or `trueforge`. |
+| `TRUEFORGE_BASE_URL`, `TRUEFORGE_TOKEN` | Your running harness URL and optional OIDC token. |
+| `TRAVELOS_STATE_SECRET` | Optional separate signing secret. Defaults to deriving signatures from the site key. Rotation invalidates old trip sessions. |
+| `TRAVELOS_MCP_TOKEN` | Optional bearer token for the read-only MCP endpoint. |
+| `HOST`, `PORT` | Local/self-hosted only; defaults 127.0.0.1:8787. |
 
-`.env.local` is ignored by Git. Never put credentials in `VITE_*` variables. OpenClaw's
-configuration is not read or modified. On a host, configure the same variables as server
-environment secrets. The app starts without a key but generation returns a clear 503 error;
-there is no runtime mock mode or hidden template fallback.
-
-Production / local build preview:
-
-```sh
-npm run build
-npm start
-```
-
-The Node server serves both `dist/` and the API. No database is required. Trip state is
-held in the current browser session and is lost on refresh. Public hosting/access controls
-are not part of this milestone; the default server binds only to localhost.
-
-## Deploy on Vercel
-
-The root `api/` directory contains Vercel Functions for `/api/health` and
-`/api/trips/generate`. Vercel serves the Vite build from `dist/`; it does **not** need
-to run `npm start` or keep the local development server alive. `vercel.json` configures
-the Vite build and a 120-second function duration, allowing the 90-second provider timeout
-to return a useful error. Use Fluid Compute for this duration.
-
-Set `TRAVELOS_OPENAI_API_KEY` in the Vercel project's environment variables for the
-environment being deployed (Production and/or Preview). Optionally set
-`TRAVELOS_OPENAI_MODEL=gpt-4o-mini`. **PORT and HOST are only for local/self-hosted runs;
-they are not needed on Vercel.** Do not prefix the key with `VITE_`.
-
-After changing environment variables, redeploy. Open the latest deployment/project domain,
-not the URL of an older immutable deployment. `/api/health` should return JSON containing
-`"runtime":"vercel"`; GET `/api/trips/generate` should return a JSON 405, not an HTML 404.
-Then generate a trip from the UI. Deployment Protection may require Vercel sign-in.
-
-## Boundaries
-
-```text
-React form / itinerary UI
-  → POST /api/trips/generate
-  → TripPreferences validation
-  → PlannerAgent
-  → AIProvider (OpenAI Responses structured output)
-  → ItineraryValidator
-  → { itinerary }
-```
-
-- `shared/`: Zod contracts, inferred TypeScript types, and structural consistency checks.
-- `server/agents/`: planner abstraction and system instructions.
-- `server/providers/`: small provider interface and real OpenAI adapter.
-- `server/app.ts`: input validation, HTTP routing, safe error envelopes, static frontend.
-- `src/components/`: form, itinerary overview, activity cards, and empty/loading states.
-- `src/hooks/useTripPlanner.ts`: simple local request state; preserves the last good trip.
-- `tests/`: contract/API/SDK tests and desktop/mobile browser tests.
-
-The Planner receives all preferences and makes one structured-output request. Both the
-provider's schema output and the application's cross-field contract are validated. There
-are request-specific schema constraints for trip metadata and the exact number of days.
-Daily and trip totals are calculated server-side from activity estimates using integer
-cents, rather than relying on the model's arithmetic. Other invalid output is rejected. There
-are no tools, bookings, retries, model routing, or additional agents. SDK retries are
-disabled, the provider timeout is 90 seconds, and output is capped at 16,000 tokens.
-
-### Contract decisions
-
-- Trips are **1–7 days**, with both dates included. September 20–23 is four days.
-- All costs are **USD for the entire party**. Include lodging, meals, activities, and
-  local transport; exclude flights and discretionary shopping. N days means N−1 hotel nights.
-- Local activity times use `HH:MM`, finish on the same day, and include duration minutes.
-- Unknown location addresses/coordinates are nullable. Nothing is live-verified.
-- Request metadata, complete dates, unique activity IDs, chronological times, durations,
-  and daily/trip cost sums are checked. These are contract checks, **not** a real-world
-  feasibility evaluator. Opening hours, routes, prices, and dietary suitability remain
-  proposals. The UI explicitly flags over-budget plans and displays model assumptions.
-- Regenerate uses the preferences behind the displayed trip. To use edited form values,
-  choose **Generate Trip**. Failure retains both the form and the previous successful trip.
-
-Example request to `POST /api/trips/generate`:
-
-```json
-{
-  "destination": "Tokyo, Japan",
-  "startDate": "2026-09-20",
-  "endDate": "2026-09-23",
-  "travelers": 2,
-  "budget": 1500,
-  "interests": ["food", "culture", "technology"],
-  "pace": "balanced",
-  "transportation": "public_transit",
-  "hotelPreference": "mid_range",
-  "dietaryRestrictions": [],
-  "additionalPreferences": "Nothing before 9 AM."
-}
-```
-
-Success: `{ "itinerary": { ... } }`. Errors:
-`{ "error": { "code": "INVALID_AI_OUTPUT", "message": "..." } }`.
-Invalid input uses 400; missing configuration 503; invalid/provider output 502; timeout 504.
-Raw provider errors, keys, prompts, and itineraries are not logged.
+Model tariffs are explicit in `server/runtime/models.ts` (OpenAI published input/output rates). Unknown model prices are rejected. Cost figures are **estimates**, not invoices. Direct OpenAI records actual response token usage; TrueForge currently charges a conservative pre-call reservation when usage is unavailable. No secret, provider response body or raw key appears in the trace.
 
 ## Checks
 
@@ -132,22 +119,16 @@ npm run typecheck
 npm run lint
 npm test
 npm run build
-npx playwright install chromium
-npm run test:e2e
+PLAYWRIGHT_CHROME=1 npm run test:e2e  # uses installed Google Chrome
+npm run check:llm                   # verifies configured key/model, no key output
 ```
 
-If Chrome is already installed, use `PLAYWRIGHT_CHROME=1 npm run test:e2e` instead of
-downloading Chromium. Browser tests run the built frontend and real HTTP/API/Planner path
-with an explicitly injected **test-only provider**; production never imports the fixture.
-SDK tests replace only the network transport, including refusal, malformed JSON, timeout,
-and server failure cases. No tests incur OpenAI charges.
+## Honest boundaries
 
-A valid site key is still required to verify live model generation: start the normal app,
-generate the four-day Tokyo trip, then regenerate. Deterministic tests do not prove live
-model access or real-world travel accuracy.
-
-## Later milestones (not implemented)
-
-TrueForge, MCP/tools, specialist agents, real-world evaluators, replanning, routing,
-observability, approvals, bookings, persistence, and chaos testing. Add these behind the
-existing API/Planner/provider boundaries rather than changing the UI's itinerary contract.
+- A hackathon reference implementation, **not a production booking service**. Venue suggestions, prices, walking estimates and map coordinates remain proposals; real hours, availability and dietary suitability are unknown, never marked verified.
+- Map lines connect proposed points; they are not navigation routes. Geocoding may select an ambiguous city; verify location. Open-Meteo provides live geographic/forecast data when reachable, with clear fallback when unavailable.
+- Trips are 1–7 inclusive days, USD for the entire party, flights excluded. Activity costs are model estimates; arithmetic totals are calculated by the server. Unknown coordinates remain null.
+- All chaos events are labelled simulations. Recovery logic and LLM calls are real. Approvals never execute money movements or bookings.
+- Session state is signed, expires after 24h, and travels with the browser so Vercel instances need no in-memory session store. This is not a multi-user durable database or replay-resistant global spend ledger. Add authenticated durable storage, idempotency and account-level rate/spend limits before shared production use. Keep the deployment access-controlled during the hackathon.
+- Changes affect only the selected activity where possible. A global budget change can affect the whole trip. Repair is bounded; infeasible constraints surface as needs-attention, not endless retries.
+- Preferences can be explicitly remembered on the current device. No hidden cross-user memory, no continuous background monitoring. Forecast triggers are manual chaos simulations, not unattended automation.

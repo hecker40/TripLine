@@ -6,11 +6,11 @@ import { generateTrip } from '../services/generate-trip';
 const MAX_BODY_BYTES = 16_384;
 const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
 
-async function readJson(request: Request): Promise<unknown> {
+export async function readJson(request: Request, maxBytes = MAX_BODY_BYTES): Promise<unknown> {
   if (request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json') {
     throw new AppError('UNSUPPORTED_MEDIA_TYPE', 'Send preferences as application/json.', 415);
   }
-  if (Number(request.headers.get('content-length')) > MAX_BODY_BYTES) {
+  if (Number(request.headers.get('content-length')) > maxBytes) {
     throw new AppError('REQUEST_TOO_LARGE', 'Trip preferences are too large.', 413);
   }
   const reader = request.body?.getReader();
@@ -22,7 +22,7 @@ async function readJson(request: Request): Promise<unknown> {
       const { value, done } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_BODY_BYTES) {
+      if (size > maxBytes) {
         await reader.cancel();
         throw new AppError('REQUEST_TOO_LARGE', 'Trip preferences are too large.', 413);
       }

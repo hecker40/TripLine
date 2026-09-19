@@ -1,3 +1,7 @@
+import { mcpHandler } from './routes/mcp';
+import { Readable } from 'node:stream';
+import type { RuntimeDependencies } from './runtime/engine';
+import { runtimeHandler } from './routes/runtime';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -19,7 +23,7 @@ function sendJson(res: ServerResponse, status: number, payload: unknown) {
   res.end(JSON.stringify(payload));
 }
 
-async function readJson(req: IncomingMessage): Promise<unknown> {
+async function readJson(req: IncomingMessage, maxBytes = MAX_BODY_BYTES): Promise<unknown> {
   if (req.headers['content-type']?.split(';')[0].trim().toLowerCase() !== 'application/json') {
     throw new AppError('UNSUPPORTED_MEDIA_TYPE', 'Send preferences as application/json.', 415);
   }
@@ -29,7 +33,7 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   for await (const chunk of req.iterator({ destroyOnReturn: false })) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.length;
-    if (size > MAX_BODY_BYTES) {
+    if (size > maxBytes) {
       req.resume();
       throw new AppError('REQUEST_TOO_LARGE', 'Trip preferences are too large.', 413);
     }
@@ -59,12 +63,18 @@ async function serveFrontend(pathname: string, req: IncomingMessage, res: Server
   res.end(req.method === 'HEAD' ? undefined : body);
 }
 
-export function createApp(provider: AIProvider = new OpenAIProvider()) {
+export function createApp(provider: AIProvider = new OpenAIProvider(), runtimeDependencies: RuntimeDependencies = {}) {
   return http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     try {
       const pathname = new URL(req.url || '/', 'http://localhost').pathname;
-      if (pathname === '/api/health' && req.method === 'GET') {
+      if ((pathname === '/api/runtime' || pathname === '/api/mcp')) {
+        const body = req.method === 'POST' ? JSON.stringify(await readJson(req, 500_000)) : undefined;
+        const request = new Request(`http://localhost${req.url}`, { method: req.method, headers: { 'Content-Type': 'application/json', ...(req.headers.authorization ? { Authorization: req.headers.authorization } : {}) }, body });
+        const response = pathname === '/api/mcp' ? await mcpHandler(request) : await runtimeHandler(request, runtimeDependencies);
+        res.writeHead(response.status, Object.fromEntries(response.headers));
+        if (response.body) Readable.fromWeb(response.body as import('node:stream/web').ReadableStream).pipe(res); else res.end();
+      } else if (pathname === '/api/health' && req.method === 'GET') {
         sendJson(res, 200, { ok: true, service: 'travelos' });
       } else if (pathname === '/api/trips/generate') {
         if (req.method !== 'POST') {

@@ -1,12 +1,17 @@
 import { z } from "zod";
 import type { Itinerary } from "./itinerary";
 import type { TripPreferences } from "./preferences";
+import type { TripStrategy } from "./planning";
+import type { StaySearch } from "./booking";
 
 export type AgentName =
   "Runtime" | "Planner" | "Research" | "Critic" | "Adapter" | "Policy";
 export type TraceStatus =
   "running" | "success" | "warning" | "failed" | "blocked" | "approval";
 export interface TraceEvent {
+  dayIndex?: number;
+  dayCount?: number;
+  date?: string;
   id: string;
   timestamp: string;
   agent: AgentName;
@@ -60,6 +65,8 @@ export interface RouteEstimate {
   source: "straight-line estimate" | "planner transit estimate";
 }
 export interface TripRun {
+  booking?: StaySearch;
+  planning?: TripStrategy;
   id: string;
   createdAt: string;
   version: number;
@@ -86,6 +93,7 @@ export type RuntimeMessage =
   | { type: "result"; data: RunEnvelope }
   | { type: "error"; code: string; message: string };
 export interface Readiness {
+  bookingConfigured?: boolean;
   ready: boolean;
   keyConfigured: boolean;
   engine: "openai" | "trueforge";
@@ -105,6 +113,12 @@ export const chaosKinds = [
 ] as const;
 export type ChaosKind = (typeof chaosKinds)[number];
 export const runtimeRequestSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("search_stays"),
+    envelope: z.unknown(),
+    rooms: z.number().int().min(1).max(12),
+    country: z.string().regex(/^[a-z]{2}$/),
+  }),
   z.object({
     action: z.literal("adapt"),
     envelope: z.unknown(),

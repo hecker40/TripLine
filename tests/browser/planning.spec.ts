@@ -132,7 +132,7 @@ test("restaurant closure changes one activity and preserves prior plan on error"
     page.locator(".ops-main").getByText(/Only one activity replaced/),
   ).toBeVisible();
   await page.getByRole("button", { name: "Trip workspace" }).click();
-  await page.getByRole("tab", { name: /Day 2/ }).click();
+  await page.getByRole("tab", { name: /Day 1/ }).click();
   await expect(
     page.getByText("Replacement venue", { exact: true }),
   ).toBeVisible();
@@ -207,9 +207,9 @@ test("day map follows tabs, highlights timed stops and offers directions", async
   await page.getByRole("tab", { name: /Day 3/ }).click();
   const map = page.getByRole("region", { name: "Map for day 3", exact: true });
   await expect(map).toBeVisible();
-  await expect(map.locator(".leaflet-overlay-pane path")).toHaveCount(1);
+  await expect(map.locator(".leaflet-overlay-pane path")).toHaveCount(5);
   await expect(
-    map.getByRole("link", { name: "Transit directions" }),
+    map.getByRole("link", { name: "Transit directions" }).first(),
   ).toHaveAttribute("href", /travelmode=transit/);
   await expect(
     page.getByRole("region", { name: "Map for day 1", exact: true }),
@@ -219,7 +219,7 @@ test("day map follows tabs, highlights timed stops and offers directions", async
   await expect(page.locator(".map-marker.active")).toHaveCount(1);
   await page.getByLabel("Route preview mode").selectOption("driving");
   await expect(map.locator(".route-stop-select").first()).toContainText(
-    "10:00–12:00",
+    "09:30–10:15",
   );
 });
 
@@ -272,4 +272,69 @@ test("agent progress is visible during generation without opening AgentOps", asy
   await expect(progress.locator('[data-agent="Adapter"]')).toContainText(
     "Not used",
   );
+});
+
+test("trip length sets dates and all requested days are visibly summarized", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Generate Trip" }),
+  ).toBeEnabled();
+  await fill(page);
+  await page.getByLabel("Trip length", { exact: true }).selectOption("4");
+  await expect(page.getByLabel("End date", { exact: true })).toHaveValue(
+    "2026-09-23",
+  );
+  await page.getByRole("button", { name: "Generate Trip" }).click();
+  const overview = page.getByRole("region", { name: "All trip days" });
+  await expect(overview).toBeVisible();
+  await expect(overview.locator(".all-days-grid > button")).toHaveCount(4);
+  await expect(overview).toContainText("4 DAYS · 3 NIGHTS");
+  await expect(page.getByLabel("Day planning progress")).toContainText("Day 4");
+  await overview.locator(".all-days-grid > button").nth(3).click();
+  await expect(
+    page.getByRole("region", { name: "Day 4", exact: true }),
+  ).toBeVisible();
+});
+
+test("Booking.com missing credentials are honest, with trip-specific manual handoff", async ({
+  page,
+}) => {
+  await generate(page);
+  const stays = page.getByRole("region", { name: "Booking.com stays" });
+  await expect(stays).toContainText("BOOKING_AFFILIATE_ID");
+  await expect(
+    stays.getByRole("button", { name: "Search live stays" }),
+  ).toBeDisabled();
+  await expect(
+    stays.getByRole("link", { name: /Open Booking.com search/ }),
+  ).toHaveAttribute("href", /checkin=2026-09-20&checkout=2026-09-23/);
+});
+
+test("configured Booking.com search displays returned hotel results without booking", async ({
+  page,
+}) => {
+  await page.route("**/api/runtime?verify=1", (r) =>
+    r.fulfill({
+      json: {
+        ready: true,
+        keyConfigured: true,
+        engine: "openai",
+        model: "gpt-4o-mini",
+        harnessConfigured: false,
+        bookingConfigured: true,
+        message: "Test providers configured",
+      },
+    }),
+  );
+  await generate(page);
+  const stays = page.getByRole("region", { name: "Booking.com stays" });
+  await stays.getByRole("button", { name: "Search live stays" }).click();
+  await expect(stays).toContainText("Test-only partner hotel");
+  await expect(stays).toContainText("$240.00");
+  await expect(
+    stays.getByRole("link", { name: /Review on Booking.com/ }),
+  ).toHaveAttribute("href", "https://www.booking.com/hotel/jp/test.html");
+  await expect(stays).toContainText("Nothing booked");
 });

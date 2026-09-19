@@ -19,6 +19,8 @@ export function AgentProgress({
   error: string;
 }) {
   if (!busy && !trace.length) return null;
+  const planning = trace.filter((e) => e.action.startsWith("plan."));
+  const dayCount = planning.at(-1)?.dayCount || 0;
   return (
     <section
       id="agent-progress"
@@ -38,6 +40,46 @@ export function AgentProgress({
         </div>
         <span className="muted">Actual runtime events</span>
       </div>
+      {dayCount > 0 && (
+        <div
+          className="planning-progress"
+          aria-label="Day planning progress"
+          aria-live="polite"
+        >
+          <p>
+            <strong>
+              Strategy → each day → whole-trip validation → Critic review
+            </strong>
+          </p>
+          <div>
+            {Array.from({ length: dayCount }, (_, i) => {
+              const event = planning.filter((e) => e.dayIndex === i + 1).at(-1);
+              const complete = event?.action === "plan.day.complete";
+              return (
+                <article
+                  key={i}
+                  className={
+                    complete ? "complete" : event ? "working" : "waiting"
+                  }
+                >
+                  <strong>Day {i + 1}</strong>
+                  <span>
+                    {complete
+                      ? "Validated"
+                      : event
+                        ? busy
+                          ? "Planning / checking"
+                          : "Interrupted"
+                        : "Waiting"}
+                  </span>
+                  <small>{event?.date || ""}</small>
+                </article>
+              );
+            })}
+          </div>
+          <p>{planning.at(-1)?.detail}</p>
+        </div>
+      )}
       <div className="agent-progress-grid" aria-live="polite">
         {agents.map(({ name, description }) => {
           const events = trace.filter((e) => e.agent === name);

@@ -5,7 +5,7 @@ import { AppError } from "../errors";
 
 export const permissions: Record<AgentName, readonly string[]> = {
   Runtime: ["routes.estimate", "booking.request"],
-  Research: ["places.search", "weather.forecast", "routes.estimate"],
+  Research: ["places.search", "weather.forecast", "routes.estimate", "booking.search"],
   Planner: ["itinerary.update", "routes.estimate"],
   Critic: ["itinerary.read"],
   Policy: [],

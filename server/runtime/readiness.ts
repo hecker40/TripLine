@@ -1,9 +1,11 @@
+import { bookingConfigured as hasBooking } from "../integrations/booking-mcp";
 import { getAIConfig } from "../config";
 import type { Readiness } from "../../shared/runtime";
 
 export async function readiness(verify = false): Promise<Readiness> {
   const engine =
     process.env.TRAVELOS_ENGINE === "trueforge" ? "trueforge" : "openai";
+  const bookingConfigured = hasBooking();
   const harnessConfigured = Boolean(process.env.TRUEFORGE_BASE_URL);
   let model = process.env.TRAVELOS_OPENAI_MODEL || "gpt-4o-mini";
   try {
@@ -16,6 +18,7 @@ export async function readiness(verify = false): Promise<Readiness> {
         engine,
         model,
         harnessConfigured,
+        bookingConfigured,
         message: "Set TRUEFORGE_BASE_URL, or use TRAVELOS_ENGINE=openai.",
       };
     if (verify && engine === "trueforge") {
@@ -33,6 +36,7 @@ export async function readiness(verify = false): Promise<Readiness> {
           engine,
           model,
           harnessConfigured,
+          bookingConfigured,
           message:
             "TrueForge is configured but unreachable or unauthorized. Check the harness URL and token.",
         };
@@ -52,6 +56,7 @@ export async function readiness(verify = false): Promise<Readiness> {
           engine,
           model,
           harnessConfigured,
+          bookingConfigured,
           message:
             result.status === 401
               ? "The deployed API key was rejected. Update TRAVELOS_OPENAI_API_KEY in Vercel and redeploy."
@@ -64,6 +69,7 @@ export async function readiness(verify = false): Promise<Readiness> {
       engine,
       model,
       harnessConfigured,
+      bookingConfigured,
       message:
         engine === "trueforge"
           ? verify
@@ -80,6 +86,7 @@ export async function readiness(verify = false): Promise<Readiness> {
       engine,
       model,
       harnessConfigured,
+      bookingConfigured,
       message:
         "Deployment setup needed: set TRAVELOS_OPENAI_API_KEY in Vercel → Settings → Environment Variables, then redeploy. A Git push does not transfer local secrets.",
     };

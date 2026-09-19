@@ -116,6 +116,8 @@ export function useRuntime() {
       execute({ action: "chaos", envelope: session, kind }),
     adapt: (date: string, resumeAt: string, message: string) =>
       execute({ action: "adapt", envelope: session, date, resumeAt, message }),
+    searchStays: (rooms: number, country: string) =>
+      execute({ action: "search_stays", envelope: session, rooms, country }),
     approve: (approvalId: string, decision: "approve" | "deny") =>
       execute({ action: "approve", envelope: session, approvalId, decision }),
     retry: () => (last.current ? execute(last.current) : Promise.resolve()),

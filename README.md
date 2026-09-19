@@ -141,3 +141,28 @@ npm run check:llm                   # verifies configured key/model, no key outp
 - Route paths use [OSRM/FOSSGIS](https://routing.openstreetmap.de/about.html); missing locations use [Photon](https://github.com/komoot/photon). Public servers are low-volume demo services, with no availability guarantee. Requests are queued at most once per 1.1 seconds per server process. For a multi-instance or busy deployment, set your own `TRAVELOS_GEOCODER_URL` (Photon `/api/`), `TRAVELOS_WALK_ROUTER_URL` and `TRAVELOS_DRIVE_ROUTER_URL` (OSRM profile roots). A per-process queue is **not** an application-wide distributed rate limiter. Only location queries/coordinates go to these map providers—not API keys or trip notes.
 - In **Adjust this day**, describe a missed train/reservation and set **Resume planning at** in destination-local time. `action: adapt` invokes the separate `AdapterAgent` through the existing budget-controlled model provider/TrueForge. It changes only unfinished activities on the selected date; completed activities and every other day are structurally preserved. The existing evaluator runs on the result. Invalid, overlapping, backdated or no-op repairs are rejected without replacing the previous plan. No bookings, refunds or cancellations occur.
 - The visible **Agent progress** panel follows actual streamed events for Research, Planner, Adapter, Critic, Policy and Runtime. It resets for each operation, shows unused agents honestly and exposes event detail. Existing agents, routing and generation ordering are unchanged.
+
+## Complete multi-day planning
+
+The main runtime now asks the **same Planner agent** to design a trip strategy, then builds each requested date separately. The strategy explains neighborhood clusters, daily anchors, lodging base and budget allocations. Day calls use the configured stronger planning model (default `gpt-4.1-mini`) through the existing TrueForge/OpenAI provider.
+
+Each date is independently checked for its pace-specific minimum blocks (4 relaxed / 6 balanced / 8 packed), at least two visits/explorations and two meal blocks, overnight lodging on non-final dates, chronology and transfer buffers. Durations and cost totals are calculated from the structured times/prices. A deterministic scheduler adds minimum transfer gaps by shifting proposed blocks forward when needed, preserves activity durations/costs, labels the adjustment in notes, and rejects days that cannot fit before midnight. These minimum buffers are not verified transit routes. A failed day gets one focused retry with its draft and validation feedback; successfully built days are not regenerated for that retry. Incomplete trips are not published. The whole-trip evaluator and Critic still run afterward. This validates structure and useful coverage, not venue opening hours or live train feasibility.
+
+The form has an explicit **Trip length** selector, generation shows individual-day progress, and **All trip days** displays the full plan before the selected-day map/timeline. Default supported range remains 1–7 inclusive days. Multi-day planning takes more model calls than the old single-shot planner; the existing per-run execution budget still applies. The legacy `/api/trips/generate` endpoint remains a compact single-call compatibility endpoint; the application uses `/api/runtime` for detailed planning.
+
+## Booking.com official MCP
+
+TravelOS now includes a read-only client for Booking.com's official `https://demandapi-mcp.booking.com/v1/mcp/<affiliate-id>` server, using the MCP SDK. It connects, discovers `accommodations_search`, validates trip-derived arguments against that account's **live JSON schema**, then calls the tool and parses actual returned properties. Unknown required schema fields fail closed rather than inventing parameters. No booking, cancellation or payment tool is callable.
+
+Set these **server-side** in `.env.local` or Vercel environment variables, then restart/redeploy:
+
+```dotenv
+BOOKING_AFFILIATE_ID=
+BOOKING_BEARER_TOKEN=
+```
+
+These come from a Booking.com partner account; an OpenAI key cannot authenticate Booking.com. See [official setup](https://developers.booking.com/mcp-server/docs/get-started) and [implementation guide](https://developers.booking.com/mcp-server/docs/implementation-guide). Without these credentials, the UI explicitly disables live MCP search but offers a separate, correctly labelled manual Booking.com search link with the generated dates/party. That link is **not** live MCP data.
+
+After generation, **Find a stay for this plan** searches the destination for check-in on the start date and check-out on the end date (N days = N−1 nights), with the traveler-selected room count and country of residence. This version treats travelers as adults, disclosed in the UI; review actual occupancy on Booking.com. Results retain the provider timestamp, returned full-stay price when present, and a validated HTTPS Booking.com link. Nightly/`book` prices are not mislabelled as full-stay totals. Listings do not silently replace the itinerary's lodging estimate, and nothing is reserved or charged. Search errors preserve the prior plan.
+
+The connector's initialization, discovery, live-schema validation, tool call, results, missing credentials and sanitized failures are tested with an explicit MCP transport fixture. **Actual partner-authenticated availability requires real Booking.com credentials and has not been live-verified in this workspace.**

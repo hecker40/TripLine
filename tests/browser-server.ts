@@ -1,12 +1,31 @@
 import { createApp } from "../server/app";
 import { tripPreferencesSchema, tripDates } from "../shared/preferences";
-import { validItinerary } from "./fixtures";
+import {
+  validItinerary,
+  strategyFixture,
+  detailedDayFixture,
+} from "./fixtures";
 import type { AIProvider } from "../server/providers/ai-provider";
 process.env.TRAVELOS_ENGINE = "openai";
 process.env.TRAVELOS_OPENAI_API_KEY = "test-only-browser-key";
 const provider: AIProvider = {
   async generateStructuredOutput(request) {
     await new Promise((resolve) => setTimeout(resolve, 150));
+    if (request.schemaName === "trip_strategy")
+      return strategyFixture(JSON.parse(request.input).preferences);
+    if (request.schemaName === "itinerary_day") {
+      const input = JSON.parse(request.input);
+      const day = detailedDayFixture(input.preferences, input.date);
+      day.activities.forEach((a, index) => {
+        a.location = {
+          name: index % 2 ? "Ueno Park" : "Asakusa",
+          address: null,
+          latitude: 35.714 + index * 0.001,
+          longitude: 139.797 - index * 0.001,
+        };
+      });
+      return day;
+    }
     if (request.schemaName === "travel_critique")
       return {
         summary: "Test-only preference review.",
@@ -88,6 +107,26 @@ const provider: AIProvider = {
 const server = createApp(provider, {
   models: () => ({ provider: () => provider }),
   research: async () => null,
+  booking: async (run, rooms, country) => ({
+    provider: "Booking.com MCP",
+    checkedAt: new Date().toISOString(),
+    destination: run.preferences.destination,
+    checkIn: run.preferences.startDate,
+    checkOut: run.preferences.endDate,
+    adults: run.preferences.travelers,
+    rooms,
+    country,
+    offers: [
+      {
+        id: "test-hotel",
+        name: "Test-only partner hotel",
+        url: "https://www.booking.com/hotel/jp/test.html",
+        totalPrice: 240,
+        currency: "USD",
+      },
+    ],
+    message: "Test-only hotel search result. Nothing booked.",
+  }),
 });
 server.listen(8791, "127.0.0.1");
 process.on("SIGTERM", () => server.close());

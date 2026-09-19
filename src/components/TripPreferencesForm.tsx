@@ -4,6 +4,7 @@ import {
   paceOptions,
   transportationOptions,
   tripPreferencesSchema,
+  tripDates,
   type TripPreferences,
 } from "../../shared/preferences";
 import { optionLabel } from "../lib/format";
@@ -182,9 +183,34 @@ export function TripPreferencesForm({
             {error("endDate")}
           </label>
         </div>
-        <span className="field-hint">
-          1–7 days, including your start and end dates.
-        </span>
+        <label>
+          Trip length
+          <select
+            aria-label="Trip length"
+            value={tripDates(values.startDate, values.endDate).length}
+            onChange={(event) => {
+              const start = new Date(`${values.startDate}T00:00:00Z`);
+              if (Number.isNaN(start.getTime())) return;
+              start.setUTCDate(
+                start.getUTCDate() + Number(event.target.value) - 1,
+              );
+              set("endDate", start.toISOString().slice(0, 10));
+            }}
+          >
+            <option value={0} disabled>
+              Check dates
+            </option>
+            {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+              <option value={n} key={n}>
+                {n} {n === 1 ? "day" : "days"} · {n - 1} nights
+              </option>
+            ))}
+          </select>
+          <span className="field-hint">
+            Every date gets its own plan, map and timeline. Both dates are
+            included.
+          </span>
+        </label>
         <div className="field-row">
           <label>
             Travelers

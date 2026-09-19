@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 import { TripPreferencesForm } from "./components/TripPreferencesForm";
 import { AgentProgress } from "./runtime/AgentProgress";
+import { TripOverview } from "./runtime/TripOverview";
+import { BookingStays } from "./runtime/BookingStays";
 import { AdaptTrip } from "./runtime/AdaptTrip";
 import { TripMap } from "./runtime/TripMap";
 import { AgentOps, TraceList } from "./runtime/AgentOps";
@@ -461,6 +463,21 @@ export default function App() {
                     <Sparkles size={18} />
                     <p>{run.explanation}</p>
                   </div>
+                  <TripOverview
+                    run={run}
+                    selectedDay={day}
+                    onSelect={(index) => {
+                      setDay(index);
+                      setSelected("");
+                    }}
+                  />
+                  <BookingStays
+                    key={run.id}
+                    run={run}
+                    configured={!!runtime.status?.bookingConfigured}
+                    busy={runtime.busy}
+                    onSearch={runtime.searchStays}
+                  />
                   <div className="itinerary-toolbar">
                     <div
                       className="day-tabs"

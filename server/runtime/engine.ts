@@ -24,8 +24,10 @@ import {
 } from "./tools";
 import { RuntimeModels, type Emit } from "./models";
 import { seal, unseal } from "./state";
+import { searchBookingStays } from "../integrations/booking-mcp";
 
 export interface RuntimeDependencies {
+  booking?: typeof searchBookingStays;
   models?: (run: TripRun, emit: Emit) => Pick<RuntimeModels, "provider">;
   research?: typeof researchDestination;
   weather?: typeof researchWeather;
@@ -153,23 +155,18 @@ export async function executeRuntime(
             )}. Propose cheaper realistic alternatives; explicitly warn if impossible.`,
         }
       : run.preferences;
-    try {
-      run.itinerary = await new PlannerAgent(
-        models.provider("Planner", repair ? "complex" : "simple"),
-      ).generateItinerary(preferences);
-    } catch (error) {
-      if (!(error instanceof AppError) || error.code !== "INVALID_AI_OUTPUT")
-        throw error;
-      trace(
-        "Planner",
-        "output.retry",
-        "warning",
-        "Structured validation failed. One bounded retry with the repair model.",
-      );
-      run.itinerary = await new PlannerAgent(
-        models.provider("Planner", "complex"),
-      ).generateItinerary(preferences);
-    }
+    const planned = await new PlannerAgent(
+      models.provider("Planner", "complex"),
+    ).generateDetailedItinerary(preferences, (event) =>
+      emit({
+        id: randomUUID(),
+        timestamp: new Date().toISOString(),
+        agent: "Planner",
+        ...event,
+      }),
+    );
+    run.itinerary = planned.itinerary;
+    run.planning = planned.strategy;
     trace(
       "Planner",
       "itinerary.update",
@@ -268,6 +265,22 @@ export async function executeRuntime(
     run.explanation = run.evaluation.passed
       ? "Your trip is ready to inspect. Live geography and forecasts are separated from proposed venues and estimated routes."
       : "A proposal is available, but some constraints need your attention. No bookings were made.";
+  } else if (request.action === "search_stays") {
+    run.booking = await tool("Research", "booking.search", () =>
+      (dependencies.booking || searchBookingStays)(
+        run,
+        request.rooms,
+        request.country,
+      ),
+    );
+    trace(
+      "Research",
+      "booking.results",
+      "success",
+      `${run.booking.offers.length} Booking.com results for ${run.booking.checkIn}–${run.booking.checkOut}, ${run.booking.adults} adults, ${run.booking.rooms} rooms. No reservation made.`,
+    );
+    run.explanation = run.booking.message;
+    reason = "Booking.com hotel search";
   } else if (request.action === "adapt") {
     assertPermission("Adapter", "itinerary.update");
     trace(
@@ -434,7 +447,7 @@ export async function executeRuntime(
     }
     run.version++;
   }
-  if (request.action !== "approve")
+  if (request.action !== "approve" && request.action !== "search_stays")
     run.revisions.push({
       version: run.version,
       reason,

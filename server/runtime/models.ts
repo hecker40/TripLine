@@ -69,7 +69,7 @@ export class RuntimeModels {
             action: "model.route",
             status: "running",
             model,
-            detail: `${attempt ? "Fallback after failure" : complexity === "complex" ? "Cross-constraint repair needs stronger reasoning" : "Structured planning / evaluation"} · reserve $${reserved.toFixed(4)}`,
+            detail: `${attempt ? "Fallback after failure" : complexity === "complex" ? "Constraint-aware planning or repair needs stronger reasoning" : "Structured planning / evaluation"} · reserve $${reserved.toFixed(4)}`,
           });
           try {
             if (simulateFailure && attempt === 0)
@@ -150,12 +150,10 @@ export class RuntimeModels {
                 503,
               );
             // Reserve the upper estimate on ambiguous failures; the request may have been billed.
-            if (
-              !(
-                error instanceof AppError &&
-                error.code === "SIMULATED_MODEL_FAILURE"
-              )
-            )
+            if (!(
+              error instanceof AppError &&
+              error.code === "SIMULATED_MODEL_FAILURE"
+            ))
               this.run.executionCost += reserved;
             this.emit({
               id: randomUUID(),

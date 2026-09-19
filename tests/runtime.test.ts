@@ -11,7 +11,12 @@ import { RuntimeModels } from "../server/runtime/models";
 import { runtimeHandler } from "../server/routes/runtime";
 import { z } from "zod";
 import type { RuntimeMessage, TripRun, TraceEvent } from "../shared/runtime";
-import { preferences, validItinerary } from "./fixtures";
+import {
+  preferences,
+  validItinerary,
+  strategyFixture,
+  detailedDayFixture,
+} from "./fixtures";
 const previous = process.env.TRAVELOS_OPENAI_API_KEY;
 const previousEngine = process.env.TRAVELOS_ENGINE;
 before(() => {
@@ -40,24 +45,31 @@ const dependencies: RuntimeDependencies = {
   models: () => ({
     provider: () => ({
       generateStructuredOutput: async (r) =>
-        r.schemaName === "travel_itinerary"
-          ? itinerary()
-          : r.schemaName === "activity_repair"
-            ? {
-                ...itinerary().days[0].activities[0],
-                title: "Alternative lunch",
-                location: {
-                  name: "New cafe",
-                  address: null,
-                  latitude: 35.715,
-                  longitude: 139.798,
-                },
-              }
-            : {
-                summary: "Good preference fit.",
-                preferenceFit: 90,
-                concerns: [],
-              },
+        r.schemaName === "trip_strategy"
+          ? strategyFixture(JSON.parse(r.input).preferences)
+          : r.schemaName === "itinerary_day"
+            ? detailedDayFixture(
+                JSON.parse(r.input).preferences,
+                JSON.parse(r.input).date,
+              )
+            : r.schemaName === "travel_itinerary"
+              ? itinerary()
+              : r.schemaName === "activity_repair"
+                ? {
+                    ...JSON.parse(r.input).original,
+                    title: "Alternative lunch",
+                    location: {
+                      name: "New cafe",
+                      address: null,
+                      latitude: 35.715,
+                      longitude: 139.798,
+                    },
+                  }
+                : {
+                    summary: "Good preference fit.",
+                    preferenceFit: 90,
+                    concerns: [],
+                  },
     }),
   }),
 };
@@ -276,8 +288,15 @@ test("adapter changes only selected day after resume time, streams and signs rev
               activities: request.remaining.map(
                 (a: Record<string, unknown>) => ({
                   ...a,
-                  startTime: "13:00",
-                  endTime: "15:00",
+                  startTime:
+                    String(
+                      Number(String(a.startTime).slice(0, 2)) + 3,
+                    ).padStart(2, "0") + String(a.startTime).slice(2),
+                  endTime:
+                    String(Number(String(a.endTime).slice(0, 2)) + 3).padStart(
+                      2,
+                      "0",
+                    ) + String(a.endTime).slice(2),
                   title: "Afternoon alternative",
                 }),
               ),
@@ -303,7 +322,11 @@ test("adapter changes only selected day after resume time, streams and signs rev
     result.run.itinerary.days.slice(2),
     data.run.itinerary.days.slice(2),
   );
-  assert.equal(result.run.itinerary.days[1].activities[0].startTime, "13:00");
+  assert.ok(
+    result.run.itinerary.days[1].activities.some(
+      (a) => a.title === "Afternoon alternative",
+    ),
+  );
   assert.ok(
     events.some((e) => e.type === "trace" && e.event.agent === "Adapter"),
   );
@@ -316,8 +339,8 @@ test("adapter preserves completed activities and rejects malformed or backdated 
   const later = {
     ...first,
     id: "afternoon",
-    startTime: "14:00",
-    endTime: "16:00",
+    startTime: "21:00",
+    endTime: "21:45",
   };
   data.run.itinerary.days[0].activities.push(later);
   data.run.itinerary.days[0].estimatedDailyCost += later.estimatedCost;
@@ -327,7 +350,7 @@ test("adapter preserves completed activities and rejects malformed or backdated 
     action: "adapt",
     envelope,
     date: "2026-09-20",
-    resumeAt: "13:00",
+    resumeAt: "20:00",
     message: "My reservation was missed. Find another place.",
   };
   const model = (activities: unknown[]) => ({

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Compass,
   Map,
@@ -27,6 +27,8 @@ import {
   Bot,
 } from "lucide-react";
 import { TripPreferencesForm } from "./components/TripPreferencesForm";
+import { AgentProgress } from "./runtime/AgentProgress";
+import { AdaptTrip } from "./runtime/AdaptTrip";
 import { TripMap } from "./runtime/TripMap";
 import { AgentOps, TraceList } from "./runtime/AgentOps";
 import { useRuntime } from "./runtime/useRuntime";
@@ -103,6 +105,12 @@ export default function App() {
   const remaining = run
     ? run.preferences.budget - run.itinerary.totalEstimatedCost
     : 0;
+  useEffect(() => {
+    if (runtime.busy)
+      document
+        .getElementById("agent-progress")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [runtime.busy]);
   async function inject(kind: ChaosKind) {
     setChaos(false);
     setTab("ops");
@@ -280,6 +288,11 @@ export default function App() {
               </button>
             </div>
           )}
+          <AgentProgress
+            trace={runtime.liveTrace}
+            busy={runtime.busy}
+            error={runtime.error}
+          />
           {tab === "ops" ? (
             <AgentOps
               run={run}
@@ -472,6 +485,13 @@ export default function App() {
                     </div>
                     <span className="proposal-label">Proposed, not booked</span>
                   </div>
+                  <AdaptTrip
+                    key={current!.date}
+                    date={current!.date}
+                    dayNumber={day + 1}
+                    busy={runtime.busy}
+                    onAdapt={runtime.adapt}
+                  />
                   <div className="itinerary-grid">
                     <div className="map-column">
                       <TripMap
@@ -486,7 +506,9 @@ export default function App() {
                               block: "nearest",
                             });
                         }}
-                        research={run.research}
+                        envelope={runtime.session!}
+                        date={current!.date}
+                        dayNumber={day + 1}
                       />
                       <div className="map-details">
                         <MapPin size={16} />

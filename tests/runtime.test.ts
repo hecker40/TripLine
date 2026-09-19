@@ -256,3 +256,138 @@ test("model chaos actually falls back and accounts for token cost", async () => 
   assert.equal(events.filter((e) => e.action === "model.failure").length, 1);
   assert.ok(data.run.executionCost > 0);
 });
+
+test("adapter changes only selected day after resume time, streams and signs revision", async () => {
+  const { data } = await generate();
+  const original = structuredClone(data);
+  const deps: RuntimeDependencies = {
+    ...dependencies,
+    models: () => ({
+      provider: (agent) => {
+        assert.equal(agent, "Adapter");
+        return {
+          generateStructuredOutput: async (r) => {
+            assert.equal(r.schemaName, "day_adaptation");
+            const request = JSON.parse(r.input);
+            return {
+              summary: "Recovered afternoon",
+              explanation:
+                "Moved the missed visit to the afternoon. Confirm availability.",
+              activities: request.remaining.map(
+                (a: Record<string, unknown>) => ({
+                  ...a,
+                  startTime: "13:00",
+                  endTime: "15:00",
+                  title: "Afternoon alternative",
+                }),
+              ),
+            };
+          },
+        };
+      },
+    }),
+  };
+  const { data: result, events } = await execute(
+    {
+      action: "adapt",
+      envelope: data,
+      date: "2026-09-21",
+      resumeAt: "11:00",
+      message: "I missed my train and will arrive at 13:00.",
+    },
+    deps,
+  );
+  assert.equal(result.run.version, 2);
+  assert.deepEqual(result.run.itinerary.days[0], data.run.itinerary.days[0]);
+  assert.deepEqual(
+    result.run.itinerary.days.slice(2),
+    data.run.itinerary.days.slice(2),
+  );
+  assert.equal(result.run.itinerary.days[1].activities[0].startTime, "13:00");
+  assert.ok(
+    events.some((e) => e.type === "trace" && e.event.agent === "Adapter"),
+  );
+  assert.deepEqual(unseal(result).itinerary, result.run.itinerary);
+  assert.deepEqual(data, original);
+});
+test("adapter preserves completed activities and rejects malformed or backdated repairs", async () => {
+  const { data } = await generate();
+  const first = data.run.itinerary.days[0].activities[0];
+  const later = {
+    ...first,
+    id: "afternoon",
+    startTime: "14:00",
+    endTime: "16:00",
+  };
+  data.run.itinerary.days[0].activities.push(later);
+  data.run.itinerary.days[0].estimatedDailyCost += later.estimatedCost;
+  data.run.itinerary.totalEstimatedCost += later.estimatedCost;
+  const envelope = seal(data.run);
+  const payload = {
+    action: "adapt",
+    envelope,
+    date: "2026-09-20",
+    resumeAt: "13:00",
+    message: "My reservation was missed. Find another place.",
+  };
+  const model = (activities: unknown[]) => ({
+    ...dependencies,
+    models: () => ({
+      provider: () => ({
+        generateStructuredOutput: async () => ({
+          summary: "Adjusted day",
+          explanation: "Changed lunch",
+          activities,
+        }),
+      }),
+    }),
+  });
+  const result = await execute(
+    payload,
+    model([{ ...later, title: "New lunch" }]),
+  );
+  assert.deepEqual(result.data.run.itinerary.days[0].activities[0], first);
+  await assert.rejects(
+    execute(
+      payload,
+      model([{ ...later, startTime: "12:00", endTime: "14:00" }]),
+    ),
+    /failed validation/,
+  );
+  await assert.rejects(
+    execute(payload, model([{ ...later, durationMinutes: 15 }])),
+    /failed validation/,
+  );
+  await assert.rejects(execute(payload, model([later])), /no changes/);
+  await assert.rejects(
+    execute({ ...payload, date: "2026-10-01" }, model([later])),
+    /Select a day/,
+  );
+  await assert.rejects(
+    execute({ ...payload, resumeAt: "23:00" }, model([later])),
+    /No activities remain/,
+  );
+});
+test("adapter rejects modified signed state and blank prompts", async () => {
+  const { data } = await generate();
+  await assert.rejects(
+    execute({
+      action: "adapt",
+      envelope: data,
+      date: "2026-09-20",
+      resumeAt: "09:00",
+      message: "   ",
+    }),
+  );
+  data.run.preferences.budget = 100000;
+  await assert.rejects(
+    execute({
+      action: "adapt",
+      envelope: data,
+      date: "2026-09-20",
+      resumeAt: "09:00",
+      message: "I missed my train",
+    }),
+    /modified outside/,
+  );
+});

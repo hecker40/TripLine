@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { PlannerAgent } from "../agents/planner-agent";
+import { AdapterAgent } from "../agents/adapter-agent";
 import { AppError } from "../errors";
 import { activitySchema, type Itinerary } from "../../shared/itinerary";
 import {
@@ -237,19 +238,17 @@ export async function executeRuntime(
         concerns: z.array(z.string().max(250)).max(5),
       });
       const critique = criticSchema.parse(
-        await models
-          .provider("Critic")
-          .generateStructuredOutput({
-            schema: criticSchema,
-            schemaName: "travel_critique",
-            instructions:
-              "Assess preference fit and practical quality. Do not claim to verify live opening hours, reservations or routes. Be concise. Report concerns honestly.",
-            input: JSON.stringify({
-              preferences: run.preferences,
-              itinerary: run.itinerary,
-              checks: run.evaluation.checks,
-            }),
+        await models.provider("Critic").generateStructuredOutput({
+          schema: criticSchema,
+          schemaName: "travel_critique",
+          instructions:
+            "Assess preference fit and practical quality. Do not claim to verify live opening hours, reservations or routes. Be concise. Report concerns honestly.",
+          input: JSON.stringify({
+            preferences: run.preferences,
+            itinerary: run.itinerary,
+            checks: run.evaluation.checks,
           }),
+        }),
       );
       run.evaluation.feedback = critique.summary;
       trace(
@@ -269,6 +268,29 @@ export async function executeRuntime(
     run.explanation = run.evaluation.passed
       ? "Your trip is ready to inspect. Live geography and forecasts are separated from proposed venues and estimated routes."
       : "A proposal is available, but some constraints need your attention. No bookings were made.";
+  } else if (request.action === "adapt") {
+    assertPermission("Adapter", "itinerary.update");
+    trace(
+      "Adapter",
+      "adapt.scope",
+      "running",
+      `User-reported disruption on ${request.date}. Adjust from ${request.resumeAt}; preserve completed activities and other days.`,
+    );
+    const adapted = await new AdapterAgent(
+      models.provider("Adapter", "complex"),
+    ).adapt(run, request.date, request.resumeAt, request.message);
+    run.itinerary = adapted.itinerary;
+    run.explanation = adapted.explanation;
+    changed = adapted.changedActivityIds;
+    trace(
+      "Adapter",
+      "itinerary.update",
+      "success",
+      `${changed.length} activity changes. Other days and completed activities preserved.`,
+    );
+    check();
+    run.version++;
+    reason = `Traveler adjustment: ${request.date} from ${request.resumeAt}`;
   } else if (request.action === "approve") {
     const approval = run.approvals.find((a) => a.id === request.approvalId);
     if (!approval || approval.status !== "pending")
@@ -494,22 +516,20 @@ async function repairActivity(
     estimatedCost: z.number().min(0).max(cap),
   });
   const replacement = schema.parse(
-    await models
-      .provider("Planner", "complex")
-      .generateStructuredOutput({
-        schema,
-        schemaName: "activity_repair",
-        instructions:
-          "Replace only the supplied activity with a different realistic nearby alternative. Preserve the exact id, category, startTime, endTime and duration. Respect party budget, diet and preferences. Use estimated party costs; never claim live verification or a booking. For rain choose an indoor venue. Keep times and unaffected activities unchanged.",
-        input: JSON.stringify({
-          reason: kind,
-          preferences: run.preferences,
-          original: before,
-          day: day.date,
-          maximumCost: cap,
-          nearby: day.activities.map((a) => a.location.name),
-        }),
+    await models.provider("Planner", "complex").generateStructuredOutput({
+      schema,
+      schemaName: "activity_repair",
+      instructions:
+        "Replace only the supplied activity with a different realistic nearby alternative. Preserve the exact id, category, startTime, endTime and duration. Respect party budget, diet and preferences. Use estimated party costs; never claim live verification or a booking. For rain choose an indoor venue. Keep times and unaffected activities unchanged.",
+      input: JSON.stringify({
+        reason: kind,
+        preferences: run.preferences,
+        original: before,
+        day: day.date,
+        maximumCost: cap,
+        nearby: day.activities.map((a) => a.location.name),
       }),
+    }),
   );
   if (
     replacement.title === before.title &&

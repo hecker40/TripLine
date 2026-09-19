@@ -1592,3 +1592,219 @@ footer {
   height: 14px;
   accent-color: #42683c;
 }
+
+/* Live status is derived solely from streamed runtime events. */
+.agent-progress {
+  margin: 20px 0;
+  scroll-margin-top: 16px;
+}
+.agent-progress h2 {
+  font-size: 20px;
+  margin: 6px 0;
+}
+.agent-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.agent-step {
+  min-width: 0;
+  border: 1px solid #dfe5df;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fafcf9;
+}
+.agent-step > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+.agent-step > div span {
+  font-size: 11px;
+  color: #57705b;
+}
+.agent-step small {
+  display: block;
+  margin-top: 7px;
+  color: #687269;
+}
+.agent-step p {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.agent-step.running {
+  border-color: #668e76;
+  box-shadow: inset 3px 0 #668e76;
+}
+.agent-step.failed,
+.agent-step.blocked {
+  border-color: #d4a3a3;
+}
+.agent-step.idle {
+  opacity: 0.65;
+}
+.agent-progress details summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+.agent-progress details .trace-list {
+  max-height: 350px;
+  overflow: auto;
+}
+.adapt-trip {
+  margin: 16px 0 22px;
+}
+.adapt-trip h3 {
+  margin: 8px 0;
+}
+.adapt-trip p {
+  color: #677268;
+  font-size: 13px;
+}
+.adapt-trip label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+}
+.adapt-trip textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 85px;
+  padding: 12px;
+  margin: 8px 0 12px;
+  border: 1px solid #d6dfd5;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+.adapt-actions {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+.adapt-actions input {
+  display: block;
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid #d6dfd5;
+  border-radius: 8px;
+}
+.adapt-actions .primary-button {
+  width: auto;
+  padding: 12px 20px;
+  border: 0;
+  border-radius: 10px;
+  background: #365a44;
+  color: white;
+  font-weight: 600;
+}
+.day-map {
+  border: 1px solid #dfe5df;
+  border-radius: 16px;
+  overflow: hidden;
+  background: white;
+}
+.route-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  font-size: 13px;
+}
+.route-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.route-toolbar select {
+  padding: 7px;
+  border: 1px solid #dfe5df;
+  border-radius: 8px;
+  background: white;
+}
+.day-map .map-frame {
+  border-radius: 0;
+}
+.route-stops {
+  padding: 14px;
+  font-size: 12px;
+}
+.route-stops > p {
+  line-height: 1.6;
+}
+.route-stops a {
+  color: #326447;
+  text-decoration: underline;
+}
+.route-stop {
+  padding: 9px 0;
+  border-top: 1px solid #eef0ed;
+}
+.route-stop.selected {
+  background: #edf4e9;
+}
+.route-stop-select {
+  display: flex;
+  text-align: left;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  padding: 8px 4px;
+}
+.route-stop-select b {
+  border-radius: 50%;
+  background: #e7ede1;
+  padding: 5px 8px;
+}
+.route-stop-select span {
+  min-width: 0;
+}
+.route-stop-select small {
+  display: block;
+  margin-top: 5px;
+  color: #6b756b;
+}
+.route-leg {
+  padding: 7px 4px;
+  color: #667269;
+  line-height: 1.6;
+}
+.route-leg a {
+  display: block;
+}
+.place-link {
+  display: inline-block;
+  margin-left: 35px;
+  padding: 3px 0;
+}
+.map-marker.active {
+  outline: 4px solid #f5cc61;
+  transform: scale(1.18);
+}
+@media (max-width: 800px) {
+  .agent-progress-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .agent-progress-grid {
+    grid-template-columns: 1fr;
+  }
+  .adapt-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

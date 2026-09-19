@@ -3,18 +3,9 @@ import type { Itinerary } from "./itinerary";
 import type { TripPreferences } from "./preferences";
 
 export type AgentName =
-  | "Runtime"
-  | "Planner"
-  | "Research"
-  | "Critic"
-  | "Policy";
+  "Runtime" | "Planner" | "Research" | "Critic" | "Adapter" | "Policy";
 export type TraceStatus =
-  | "running"
-  | "success"
-  | "warning"
-  | "failed"
-  | "blocked"
-  | "approval";
+  "running" | "success" | "warning" | "failed" | "blocked" | "approval";
 export interface TraceEvent {
   id: string;
   timestamp: string;
@@ -114,6 +105,13 @@ export const chaosKinds = [
 ] as const;
 export type ChaosKind = (typeof chaosKinds)[number];
 export const runtimeRequestSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("adapt"),
+    envelope: z.unknown(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    resumeAt: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    message: z.string().trim().min(5).max(1500),
+  }),
   z.object({
     action: z.literal("generate"),
     preferences: z.unknown(),

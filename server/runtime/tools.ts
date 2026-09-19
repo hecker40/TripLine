@@ -9,6 +9,7 @@ export const permissions: Record<AgentName, readonly string[]> = {
   Planner: ["itinerary.update", "routes.estimate"],
   Critic: ["itinerary.read"],
   Policy: [],
+  Adapter: ["itinerary.update", "routes.estimate"],
 };
 export function assertPermission(agent: AgentName, tool: string) {
   if (!permissions[agent].includes(tool))

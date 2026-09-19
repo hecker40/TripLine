@@ -11,6 +11,7 @@ import type { TripPreferences } from "../../shared/preferences";
 export function useRuntime() {
   const [session, setSession] = useState<RunEnvelope | null>(null);
   const [trace, setTrace] = useState<TraceEvent[]>([]);
+  const [liveTrace, setLiveTrace] = useState<TraceEvent[]>([]);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [status, setStatus] = useState<Readiness | null>(null);
@@ -46,6 +47,7 @@ export function useRuntime() {
     lock.current = true;
     setBusy(true);
     setError("");
+    setLiveTrace([]);
     last.current = payload;
     if (reset) setTrace([]);
     try {
@@ -74,8 +76,10 @@ export function useRuntime() {
         for (const line of lines) {
           if (!line.trim()) continue;
           const event = JSON.parse(line) as RuntimeMessage;
-          if (event.type === "trace")
+          if (event.type === "trace") {
             setTrace((t) => [...t, event.event].slice(-180));
+            setLiveTrace((t) => [...t, event.event].slice(-180));
+          }
           if (event.type === "error") throw new Error(event.message);
           if (event.type === "result") {
             setSession(event.data);
@@ -99,6 +103,7 @@ export function useRuntime() {
   return {
     session,
     trace,
+    liveTrace,
     busy,
     error,
     status,
@@ -109,6 +114,8 @@ export function useRuntime() {
       execute({ action: "generate", preferences, ...settings }, true),
     chaos: (kind: ChaosKind) =>
       execute({ action: "chaos", envelope: session, kind }),
+    adapt: (date: string, resumeAt: string, message: string) =>
+      execute({ action: "adapt", envelope: session, date, resumeAt, message }),
     approve: (approvalId: string, decision: "approve" | "deny") =>
       execute({ action: "approve", envelope: session, approvalId, decision }),
     retry: () => (last.current ? execute(last.current) : Promise.resolve()),

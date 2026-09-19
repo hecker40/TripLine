@@ -13,6 +13,19 @@ const provider: AIProvider = {
         preferenceFit: 90,
         concerns: [],
       };
+    if (request.schemaName === "day_adaptation") {
+      const input = JSON.parse(request.input);
+      return {
+        summary: "Adjusted after a missed train",
+        explanation: "Moved the affected stop; other days preserved.",
+        activities: input.remaining.map(
+          (a: Record<string, unknown>, index: number) => ({
+            ...a,
+            title: index === 0 ? "Recovered visit" : a.title,
+          }),
+        ),
+      };
+    }
     if (request.schemaName === "activity_repair") {
       const input = JSON.parse(request.input);
       return {
@@ -49,6 +62,24 @@ const provider: AIProvider = {
         })),
       }),
     );
+    itinerary.days.forEach((day, index) => {
+      day.activities.push({
+        ...structuredClone(day.activities[0]),
+        id: `afternoon-${index}`,
+        title: "Ueno park visit",
+        category: "activity",
+        startTime: "14:00",
+        endTime: "15:00",
+        durationMinutes: 60,
+        estimatedCost: 0,
+        location: {
+          name: "Ueno Park",
+          address: null,
+          latitude: 35.715,
+          longitude: 139.774,
+        },
+      });
+    });
     itinerary.totalEstimatedCost = itinerary.days.length * 50;
     return itinerary;
   },

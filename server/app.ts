@@ -1,4 +1,5 @@
 import { mcpHandler } from './routes/mcp';
+import { mapsHandler } from './routes/maps';
 import { Readable } from 'node:stream';
 import type { RuntimeDependencies } from './runtime/engine';
 import { runtimeHandler } from './routes/runtime';
@@ -68,10 +69,10 @@ export function createApp(provider: AIProvider = new OpenAIProvider(), runtimeDe
     res.setHeader('X-Content-Type-Options', 'nosniff');
     try {
       const pathname = new URL(req.url || '/', 'http://localhost').pathname;
-      if ((pathname === '/api/runtime' || pathname === '/api/mcp')) {
+      if ((pathname === '/api/runtime' || pathname === '/api/mcp' || pathname === '/api/maps')) {
         const body = req.method === 'POST' ? JSON.stringify(await readJson(req, 500_000)) : undefined;
         const request = new Request(`http://localhost${req.url}`, { method: req.method, headers: { 'Content-Type': 'application/json', ...(req.headers.authorization ? { Authorization: req.headers.authorization } : {}) }, body });
-        const response = pathname === '/api/mcp' ? await mcpHandler(request) : await runtimeHandler(request, runtimeDependencies);
+        const response = pathname === '/api/maps' ? await mapsHandler(request) : pathname === '/api/mcp' ? await mcpHandler(request) : await runtimeHandler(request, runtimeDependencies);
         res.writeHead(response.status, Object.fromEntries(response.headers));
         if (response.body) Readable.fromWeb(response.body as import('node:stream/web').ReadableStream).pipe(res); else res.end();
       } else if (pathname === '/api/health' && req.method === 'GET') {

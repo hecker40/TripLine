@@ -7,9 +7,16 @@ import {
 } from "../server/integrations/booking-mcp";
 import type { TripRun } from "../shared/runtime";
 import { preferences } from "./fixtures";
+import {
+  bookingConfigured,
+  bookingEndpoint,
+  DEFAULT_BOOKING_MCP_URL,
+} from "../server/integrations/booking-config";
 const oldId = process.env.BOOKING_AFFILIATE_ID,
-  oldToken = process.env.BOOKING_BEARER_TOKEN;
+  oldToken = process.env.BOOKING_BEARER_TOKEN,
+  oldUrl = process.env.BOOKING_MCP_URL;
 before(() => {
+  delete process.env.BOOKING_MCP_URL;
   process.env.BOOKING_AFFILIATE_ID = "1234567";
   process.env.BOOKING_BEARER_TOKEN = "test-only-booking-token";
 });
@@ -17,9 +24,33 @@ after(() => {
   for (const [name, value] of [
     ["BOOKING_AFFILIATE_ID", oldId],
     ["BOOKING_BEARER_TOKEN", oldToken],
+    ["BOOKING_MCP_URL", oldUrl],
   ]) {
     if (value === undefined) delete process.env[name!];
     else process.env[name!] = value;
+  }
+});
+
+test("project endpoint is integrated by default and refuses mismatched or untrusted URLs", () => {
+  delete process.env.BOOKING_AFFILIATE_ID;
+  try {
+    assert.equal(bookingEndpoint().toString(), DEFAULT_BOOKING_MCP_URL);
+    assert.equal(bookingConfigured(), true);
+    for (const url of [
+      "https://evil.example/v1/mcp/8132308",
+      "https://demandapi-mcp.booking.com/v1/mcp/8132308?token=bad",
+      "https://user:password@demandapi-mcp.booking.com/v1/mcp/8132308",
+    ]) {
+      process.env.BOOKING_MCP_URL = url;
+      assert.throws(() => bookingEndpoint(), /official Booking.com/);
+      assert.equal(bookingConfigured(), false);
+    }
+    process.env.BOOKING_MCP_URL = DEFAULT_BOOKING_MCP_URL;
+    process.env.BOOKING_AFFILIATE_ID = "1234567";
+    assert.throws(() => bookingEndpoint(), /matching affiliate/);
+  } finally {
+    delete process.env.BOOKING_MCP_URL;
+    process.env.BOOKING_AFFILIATE_ID = "1234567";
   }
 });
 const properties = {

@@ -7,13 +7,8 @@ import { z } from "zod";
 import type { TripRun } from "../../shared/runtime";
 import type { StayOffer, StaySearch } from "../../shared/booking";
 import { AppError } from "../errors";
-
-export function bookingConfigured() {
-  return (
-    /^\d+$/.test(process.env.BOOKING_AFFILIATE_ID?.trim() || "") &&
-    Boolean(process.env.BOOKING_BEARER_TOKEN?.trim())
-  );
-}
+import { bookingConfigured, bookingEndpoint } from "./booking-config";
+export { bookingConfigured } from "./booking-config";
 export interface StayQuery {
   destination: string;
   checkIn: string;
@@ -158,10 +153,11 @@ export async function searchBookingStays(
       "Rooms cannot exceed the number of travelers.",
       400,
     );
+  const endpoint = bookingEndpoint();
   if (!bookingConfigured())
     throw new AppError(
       "BOOKING_NOT_CONFIGURED",
-      "Live hotel search needs BOOKING_AFFILIATE_ID and BOOKING_BEARER_TOKEN from a Booking.com partner account. Your OpenAI key is separate.",
+      "The Booking.com endpoint is configured. Add BOOKING_BEARER_TOKEN from the matching Booking.com partner account to enable live hotel search. Your OpenAI key is separate.",
       503,
     );
   const query: StayQuery = {
@@ -176,33 +172,28 @@ export async function searchBookingStays(
     name: "travelos-booking-search",
     version: "1.0.0",
   });
-  const transport = new StreamableHTTPClientTransport(
-    new URL(
-      `https://demandapi-mcp.booking.com/v1/mcp/${process.env.BOOKING_AFFILIATE_ID!.trim()}`,
-    ),
-    {
-      requestInit: {
-        headers: {
-          Authorization: `Bearer ${process.env.BOOKING_BEARER_TOKEN!.trim()}`,
-        },
-      },
-      fetch: async (url, init) =>
-        transportFetch(url, {
-          ...init,
-          redirect: "error",
-          signal: AbortSignal.any([
-            ...(init?.signal ? [init.signal] : []),
-            AbortSignal.timeout(15_000),
-          ]),
-        }),
-      reconnectionOptions: {
-        maxRetries: 0,
-        initialReconnectionDelay: 1000,
-        maxReconnectionDelay: 1000,
-        reconnectionDelayGrowFactor: 1,
+  const transport = new StreamableHTTPClientTransport(endpoint, {
+    requestInit: {
+      headers: {
+        Authorization: `Bearer ${process.env.BOOKING_BEARER_TOKEN!.trim()}`,
       },
     },
-  );
+    fetch: async (url, init) =>
+      transportFetch(url, {
+        ...init,
+        redirect: "error",
+        signal: AbortSignal.any([
+          ...(init?.signal ? [init.signal] : []),
+          AbortSignal.timeout(15_000),
+        ]),
+      }),
+    reconnectionOptions: {
+      maxRetries: 0,
+      initialReconnectionDelay: 1000,
+      maxReconnectionDelay: 1000,
+      reconnectionDelayGrowFactor: 1,
+    },
+  });
   try {
     await client.connect(transport, { timeout: 15_000 });
     let cursor: string | undefined;

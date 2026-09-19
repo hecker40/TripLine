@@ -222,7 +222,12 @@ export function TripMap({
                   {leg && leg.minutes > gap && (
                     <strong className="danger">
                       {" "}
-                      · Exceeds the {gap} min scheduled gap
+                      ·{" "}
+                      {envelope.run.preferences.transportation ===
+                        "public_transit" ||
+                      envelope.run.preferences.transportation === "mixed"
+                        ? `Walking/driving preview exceeds ${gap} min; check your planned transit connection`
+                        : `Exceeds the ${gap} min scheduled gap`}
                     </strong>
                   )}
                   <a

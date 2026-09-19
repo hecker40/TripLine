@@ -40,10 +40,11 @@ export function BookingStays({
         <div className="booking-setup" role="status">
           <strong>Official MCP integration needs partner access</strong>
           <p>
-            Set BOOKING_AFFILIATE_ID and BOOKING_BEARER_TOKEN on the server to
-            enable live results. Your OpenAI key cannot authenticate
-            Booking.com. The manual search link below works without MCP
-            credentials.
+            The Booking.com endpoint is integrated. Set BOOKING_BEARER_TOKEN
+            from the matching partner account on the server to enable live
+            results. Check BOOKING_MCP_URL / BOOKING_AFFILIATE_ID if using
+            another account. Your OpenAI key cannot authenticate Booking.com.
+            The manual search link below works without MCP credentials.
           </p>
         </div>
       )}

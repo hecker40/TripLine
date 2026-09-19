@@ -2,6 +2,7 @@ import type { Itinerary } from "../../shared/itinerary";
 import { validateItinerary } from "../../shared/itinerary";
 import type { TripPreferences } from "../../shared/preferences";
 import type { Check, Evaluation, RouteEstimate } from "../../shared/runtime";
+import { transferIssues, wakeUpTime } from "../../shared/scheduling";
 
 export function evaluate(
   itinerary: Itinerary,
@@ -29,9 +30,17 @@ export function evaluate(
       itinerary.totalEstimatedCost <= preferences.budget ? "pass" : "fail",
     detail: `$${itinerary.totalEstimatedCost.toFixed(2)} of $${preferences.budget.toFixed(2)} for the whole party.`,
   });
-  const wake = /Wake-up not before (\d{2}:\d{2})/.exec(
-    preferences.additionalPreferences,
-  )?.[1];
+  const scheduleIssues = itinerary.days.flatMap((day) =>
+    transferIssues(day, preferences).map((issue) => `${day.date}: ${issue}`),
+  );
+  checks.push({
+    name: "Transfer buffers",
+    status: scheduleIssues.length ? "fail" : "pass",
+    detail: scheduleIssues.length
+      ? scheduleIssues.join(" ").slice(0, 1200)
+      : "Estimated minimum transfer buffers fit, including explicit transit blocks. Routes and timetables still require confirmation.",
+  });
+  const wake = wakeUpTime(preferences);
   if (wake)
     checks.push({
       name: "Wake-up time",

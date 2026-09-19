@@ -46,6 +46,32 @@ test('provider schema converts to strict OpenAI structured output format', () =>
   assert.equal(format.strict, true);
 });
 
+test('planner constrains request metadata and full day count in its provider schema', async () => {
+  const result = await request({ async generateStructuredOutput(input) {
+    const incomplete = validItinerary();
+    incomplete.days = incomplete.days.slice(0, 1);
+    assert.equal(input.schema.safeParse(incomplete).success, false);
+    assert.equal(input.schema.safeParse({ ...validItinerary(), destination: 'Kyoto' }).success, false);
+    assert.equal(zodTextFormat(input.schema, input.schemaName).strict, true);
+    return incomplete;
+  } });
+  assert.equal(result.status, 502);
+  assert.equal(result.body.error.code, 'INVALID_AI_OUTPUT');
+});
+
+test('planner derives totals from activity estimates using integer cents', async () => {
+  const result = await request({ async generateStructuredOutput() {
+    const output = validItinerary();
+    output.totalEstimatedCost = 999;
+    output.days[0].estimatedDailyCost = 123;
+    output.days[0].activities[0].estimatedCost = 50.15;
+    return output;
+  } });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.itinerary.days[0].estimatedDailyCost, 50.15);
+  assert.equal(result.body.itinerary.totalEstimatedCost, 200.15);
+});
+
 test('invalid input is rejected before invoking the provider', async () => {
   let calls = 0;
   const result = await request({ async generateStructuredOutput() { calls++; return validItinerary(); } }, { ...preferences, travelers: 0 });

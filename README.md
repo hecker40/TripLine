@@ -82,6 +82,9 @@ React form / itinerary UI
 
 The Planner receives all preferences and makes one structured-output request. Both the
 provider's schema output and the application's cross-field contract are validated. There
+are request-specific schema constraints for trip metadata and the exact number of days.
+Daily and trip totals are calculated server-side from activity estimates using integer
+cents, rather than relying on the model's arithmetic. Other invalid output is rejected. There
 are no tools, bookings, retries, model routing, or additional agents. SDK retries are
 disabled, the provider timeout is 90 seconds, and output is capped at 16,000 tokens.
 

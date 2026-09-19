@@ -42,6 +42,24 @@ The Node server serves both `dist/` and the API. No database is required. Trip s
 held in the current browser session and is lost on refresh. Public hosting/access controls
 are not part of this milestone; the default server binds only to localhost.
 
+## Deploy on Vercel
+
+The root `api/` directory contains Vercel Functions for `/api/health` and
+`/api/trips/generate`. Vercel serves the Vite build from `dist/`; it does **not** need
+to run `npm start` or keep the local development server alive. `vercel.json` configures
+the Vite build and a 120-second function duration, allowing the 90-second provider timeout
+to return a useful error. Use Fluid Compute for this duration.
+
+Set `TRAVELOS_OPENAI_API_KEY` in the Vercel project's environment variables for the
+environment being deployed (Production and/or Preview). Optionally set
+`TRAVELOS_OPENAI_MODEL=gpt-4o-mini`. **PORT and HOST are only for local/self-hosted runs;
+they are not needed on Vercel.** Do not prefix the key with `VITE_`.
+
+After changing environment variables, redeploy. Open the latest deployment/project domain,
+not the URL of an older immutable deployment. `/api/health` should return JSON containing
+`"runtime":"vercel"`; GET `/api/trips/generate` should return a JSON 405, not an HTML 404.
+Then generate a trip from the UI. Deployment Protection may require Vercel sign-in.
+
 ## Boundaries
 
 ```text

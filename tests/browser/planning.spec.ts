@@ -81,3 +81,13 @@ test('layout fits the viewport before and after generation', async ({ page }, te
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('itinerary.png'), fullPage: true });
 });
+
+test('a missing deployed API reports a deployment issue instead of a generic planner error', async ({ page }) => {
+  await page.goto('/');
+  await page.route('**/api/trips/generate', (route) => route.fulfill({
+    status: 404, contentType: 'text/html', body: '<h1>Not Found</h1>',
+  }));
+  await fillTrip(page);
+  await page.getByRole('button', { name: 'Generate Trip' }).click();
+  await expect(page.getByRole('alert')).toContainText('API is missing from this deployment');
+});

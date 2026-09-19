@@ -15,6 +15,12 @@ export async function generateTrip(preferences: TripPreferences, signal: AbortSi
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const parsed = apiErrorSchema.safeParse(payload);
+    if (!parsed.success && response.status === 404) {
+      throw new Error('The itinerary API is missing from this deployment. Redeploy TravelOS with its backend functions.');
+    }
+    if (!parsed.success && response.status === 504) {
+      throw new Error('The hosting server timed out while planning. Please try again.');
+    }
     throw new Error(parsed.success ? parsed.data.error.message : 'We could not generate your itinerary. Please try again.');
   }
   const parsed = generationResponseSchema.safeParse(payload);

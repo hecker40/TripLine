@@ -2,9 +2,8 @@ import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { tripPreferencesSchema } from '../shared/preferences';
-import { PlannerAgent } from './agents/planner-agent';
-import { AppError } from './errors';
+import { AppError, safeError } from './errors';
+import { generateTrip } from './services/generate-trip';
 import { OpenAIProvider } from './providers/openai-provider';
 import type { AIProvider } from './providers/ai-provider';
 
@@ -61,7 +60,6 @@ async function serveFrontend(pathname: string, req: IncomingMessage, res: Server
 }
 
 export function createApp(provider: AIProvider = new OpenAIProvider()) {
-  const planner = new PlannerAgent(provider);
   return http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     try {
@@ -73,12 +71,7 @@ export function createApp(provider: AIProvider = new OpenAIProvider()) {
           res.setHeader('Allow', 'POST');
           throw new AppError('METHOD_NOT_ALLOWED', 'Use POST to generate a trip.', 405);
         }
-        const parsed = tripPreferencesSchema.safeParse(await readJson(req));
-        if (!parsed.success) {
-          throw new AppError('INVALID_PREFERENCES', 'Check your destination, dates (1–7 days), travelers, budget, and preferences.', 400);
-        }
-        const itinerary = await planner.generateItinerary(parsed.data);
-        sendJson(res, 200, { itinerary });
+        sendJson(res, 200, await generateTrip(await readJson(req), provider));
       } else if (pathname.startsWith('/api/')) {
         throw new AppError('NOT_FOUND', 'API endpoint not found.', 404);
       } else if (req.method === 'GET' || req.method === 'HEAD') {
@@ -87,9 +80,7 @@ export function createApp(provider: AIProvider = new OpenAIProvider()) {
         throw new AppError('NOT_FOUND', 'Not found.', 404);
       }
     } catch (error) {
-      const failure = error instanceof AppError ? error
-        : new AppError('INTERNAL_ERROR', 'Something went wrong. Please try again.', 500);
-      console.error('[api]', { code: failure.code, status: failure.status });
+      const failure = safeError(error);
       sendJson(res, failure.status, { error: { code: failure.code, message: failure.message } });
     }
   });
